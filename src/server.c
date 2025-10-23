@@ -174,34 +174,11 @@ int main(int argc, char **argv)
                 // handle commands
                 if (strcmp(cmd, CMD_REGISTER) == 0)
                 {
-                    printf("Client fd=%d sent REGISTER\n", c->fd);
-                    if (args)
-                    {
-                        // args: <name>
-                        strncpy(c->name, args, sizeof(c->name) - 1);
-                        c->name[sizeof(c->name) - 1] = '\0';
-                        char resp[PROTO_MAX_LINE];
-                        snprintf(resp, sizeof(resp), "REGISTERED %s\n", c->name);
-                        send(c->fd, resp, strlen(resp), 0);
-                        printf("Client fd=%d registered as %s\n", c->fd, c->name);
-                    }
+                    // register username
                 }
                 else if (strcmp(cmd, CMD_LIST_USERS) == 0)
                 {
-                    printf("Client fd=%d requested user list\n", c->fd);
-                    char resp[PROTO_MAX_LINE];
-                    resp[0] = '\0';
-                    strncat(resp, CMD_USERS, sizeof(resp) - strlen(resp) - 1);
-                    for (int j = 0; j < MAX_CLIENTS; ++j)
-                    {
-                        if (clients[j].fd != -1 && clients[j].name[0])
-                        {
-                            strncat(resp, " ", sizeof(resp) - strlen(resp) - 1);
-                            strncat(resp, clients[j].name, sizeof(resp) - strlen(resp) - 1);
-                        }
-                    }
-                    strncat(resp, "\n", sizeof(resp) - strlen(resp) - 1);
-                    send(c->fd, resp, strlen(resp), 0);
+                    // send user list
                 }
                 else
                 {

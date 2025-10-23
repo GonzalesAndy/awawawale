@@ -26,14 +26,6 @@ static void print_help(void)
     printf("  quit                 - exit\n");
 }
 
-static int set_nonblocking(int fd)
-{
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-        return -1;
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK); // set non-blocking : don't wait data on recv/send
-}
-
 int main(int argc, char **argv)
 {
     (void)argc;
@@ -73,34 +65,7 @@ int main(int argc, char **argv)
 
         if (strcmp(cmd, "register") == 0)
         {
-            char *name = strtok(NULL, "");
-            if (!name)
-            {
-                printf("Usage: register <name>\n");
-                continue;
-            }
-            if (sockfd != -1)
-            {
-                char out[PROTO_MAX_LINE];
-                proto_build_register(out, sizeof(out), name);
-                ssize_t s = send(sockfd, out, strlen(out), 0);
-                if (s < 0)
-                    perror("send");
-                else
-                    printf("Sent: %s\n", out);
-                char in[PROTO_MAX_LINE];
-                ssize_t r = recv(sockfd, in, sizeof(in) - 1, 0);
-                if (r > 0)
-                {
-                    in[r] = '\0';
-                    printf("Server: %s\n", in);
-                }
-            }
-            else
-            {
-                printf("Cannot register in local mode. Connect to a server first.\n");
-            }
-            continue;
+            // set username
         }
 
         if (strcmp(cmd, "connect") == 0)
@@ -154,83 +119,27 @@ int main(int argc, char **argv)
 
         if (strcmp(cmd, "list") == 0)
         {
-            proto_build_list_users(out, sizeof(out));
+            // request user list
         }
         else if (strcmp(cmd, "challenge") == 0)
         {
-            char *who = strtok(NULL, "");
-            if (!who)
-            {
-                printf("Usage: challenge <user>\n");
-                continue;
-            }
-            if (username[0] == '\0')
-            {
-                printf("Register a username first with 'register <name>'\n");
-                continue;
-            }
-            proto_build_challenge(out, sizeof(out), username, who);
+            // challenge a user
         }
         else if (strcmp(cmd, "accept") == 0)
         {
-            char *who = strtok(NULL, "");
-            if (!who)
-            {
-                printf("Usage: accept <user>\n");
-                continue;
-            }
-            if (username[0] == '\0')
-            {
-                printf("Register first\n");
-                continue;
-            }
-            proto_build_accept(out, sizeof(out), username, who);
+            // accept a challenge
         }
         else if (strcmp(cmd, "refuse") == 0)
         {
-            char *who = strtok(NULL, "");
-            if (!who)
-            {
-                printf("Usage: refuse <user>\n");
-                continue;
-            }
-            if (username[0] == '\0')
-            {
-                printf("Register first\n");
-                continue;
-            }
-            proto_build_refuse(out, sizeof(out), username, who);
+            // refuse a challenge
         }
         else if (strcmp(cmd, "move") == 0)
         {
-            char *p = strtok(NULL, " ");
-            if (!p)
-            {
-                printf("Usage: move <pit_index>\n");
-                continue;
-            }
-            int pit = atoi(p);
-            if (username[0] == '\0')
-            {
-                printf("Register first\n");
-                continue;
-            }
-            proto_build_move(out, sizeof(out), username, pit);
+            // play a move
         }
         else if (strcmp(cmd, "chat") == 0)
         {
-            char *msg = strtok(NULL, "");
-            if (!msg)
-            {
-                printf("Usage: chat <message>\n");
-                continue;
-            }
-            if (username[0] == '\0')
-            {
-                printf("Register first\n");
-                continue;
-            }
-            proto_build_chat(out, sizeof(out), username, msg);
+            // send chat message
         }
         else
         {
@@ -243,7 +152,7 @@ int main(int argc, char **argv)
 
         if (sockfd != -1)
         {
-            // send to server (non-blocking)
+            // send to server
             size_t tosend = strlen(out);
             ssize_t s = send(sockfd, out, tosend, 0);
             if (s < 0)

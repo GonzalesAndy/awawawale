@@ -18,17 +18,17 @@ typedef struct {
 // Initialize a game with standard starting seeds
 void game_init(game_t *g);
 
-// Make a move for the given player from pit index (0..11).
+// Make a move for the given player from pit index.
 // Returns true if move was legal and applied; false otherwise.
 bool game_make_move(game_t *g, player_t p, int pit_index);
 
 // Print board to stdout (ASCII)
 void game_print(const game_t *g);
 
-// Check whether game is over (no moves or seeds captured) or one side empty
+// Check whether game is over.
 bool game_is_over(const game_t *g);
 
-// Save game to file path (simple text format). Returns 0 on success.
+// Save game to file path. Returns 0 on success.
 int game_save(const game_t *g, const char *path);
 
 // Load game from file path. Returns 0 on success.

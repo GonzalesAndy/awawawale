@@ -3,6 +3,6 @@
 
 #include "game.h"
 
-// Server will keep user registry, active games, and sockets (to be implemented)
+// Server will keep user registry, active games, and sockets.
 
 #endif // SERVER_H
