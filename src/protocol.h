@@ -14,7 +14,7 @@
 #include <stddef.h>
 
 // Max sizes for buffers
-#define PROTO_MAX_LINE 512
+#define PROTO_MAX_LINE 1024
 
 // Build a protocol line into dest. Returns dest or NULL on error.
 char *proto_build_list_users(char *dest, size_t n);

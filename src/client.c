@@ -65,7 +65,31 @@ int main(int argc, char **argv)
 
         if (strcmp(cmd, "register") == 0)
         {
-            // set username
+            char *name = strtok(NULL, "");
+            if (!name)
+            {
+                printf("Usage: register <name>\n");
+                continue;
+            }
+            if (sockfd != -1)
+            {
+                char out[PROTO_MAX_LINE];
+                proto_build_register(out, sizeof(out), name);
+                ssize_t s = send(sockfd, out, strlen(out), 0);
+                if (s < 0)
+                    perror("send");
+                else {
+                    strncpy(username, name, sizeof(username) - 1);
+                    username[sizeof(username) - 1] = '\0';
+                }
+                char in[PROTO_MAX_LINE];
+                ssize_t r = recv(sockfd, in, sizeof(in) - 1, 0);
+                if (r > 0)
+                {
+                    in[r] = '\0';
+                    printf("Server: %s\n", in);
+                }
+            }
         }
 
         if (strcmp(cmd, "connect") == 0)
@@ -108,7 +132,6 @@ int main(int argc, char **argv)
                 printf("Failed to connect\n");
                 continue;
             }
-            // set_nonblocking(sockfd);
             printf("Connected to %s:%s\n", host, port);
             continue;
         }
@@ -119,7 +142,7 @@ int main(int argc, char **argv)
 
         if (strcmp(cmd, "list") == 0)
         {
-            // request user list
+            proto_build_list_users(out, sizeof(out));
         }
         else if (strcmp(cmd, "challenge") == 0)
         {

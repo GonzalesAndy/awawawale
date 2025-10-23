@@ -174,7 +174,15 @@ int main(int argc, char **argv)
                 // handle commands
                 if (strcmp(cmd, CMD_REGISTER) == 0)
                 {
-                    // register username
+                    if (args)  // args: <name>
+                    {
+                        strncpy(c->name, args, sizeof(c->name) - 1);
+                        c->name[sizeof(c->name) - 1] = '\0';
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "REGISTERED %s\n", c->name);
+                        send(c->fd, resp, strlen(resp), 0);
+                        printf("Client fd=%d registered as %s\n", c->fd, c->name);
+                    }
                 }
                 else if (strcmp(cmd, CMD_LIST_USERS) == 0)
                 {

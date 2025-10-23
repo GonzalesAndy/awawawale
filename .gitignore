@@ -7,6 +7,9 @@
 *.obj
 *.elf
 
+bin/
+settings.json
+
 # Linker output
 *.ilk
 *.map
