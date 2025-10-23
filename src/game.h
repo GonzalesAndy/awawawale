@@ -7,7 +7,7 @@
 #define N_PITS 12
 #define SEEDS_PER_PIT 4
 
-typedef enum { PLAYER_A = 0, PLAYER_B = 1 } player_t;
+typedef enum { PLAYER_A = 0, PLAYER_B = 1, TIE = 2 } player_t;
 
 typedef struct {
     int pits[N_PITS]; // 0..5 = player A's pits, 6..11 = player B's pits
