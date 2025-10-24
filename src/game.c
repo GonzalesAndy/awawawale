@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-void game_init(game_t *g) {
+void game_init(game_t *g, const char *player_a_name, const char *player_b_name) {
     for (int i = 0; i < N_PITS; ++i) g->pits[i] = SEEDS_PER_PIT;
     g->score[0] = g->score[1] = 0;
     /* seed RNG once for random start */
