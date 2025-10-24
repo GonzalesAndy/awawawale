@@ -26,15 +26,19 @@ char *proto_build_refuse(char *dest, size_t n, const char *from, const char *to)
     return dest;
 }
 
-char *proto_build_move(char *dest, size_t n, const char *from, int pit_index) {
+char *proto_build_move(char *dest, size_t n, const char *from, uint64_t game_id, int pit_index){
     if (!dest || !from) return NULL;
-    snprintf(dest, n, "%s %s %d\n", CMD_MOVE, from, pit_index);
+    snprintf(dest, n, "%s %s %lu %d\n", CMD_MOVE, from, game_id, pit_index);
     return dest;
 }
 
-char *proto_build_chat(char *dest, size_t n, const char *from, const char *msg) {
+char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, const char *msg) {
     if (!dest || !from || !msg) return NULL;
-    snprintf(dest, n, "%s %s %s\n", CMD_CHAT, from, msg);
+    if (to && to[0] != '\0') {
+        snprintf(dest, n, "%s %s %s %s\n", CMD_CHAT, from, to, msg);
+    } else {
+        snprintf(dest, n, "%s %s %s\n", CMD_CHAT, from, msg);
+    }
     return dest;
 }
 

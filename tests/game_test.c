@@ -3,7 +3,7 @@
 
 int main(void) {
     game_t g;
-    game_init(&g);
+    game_init(&g, "Alice", "Bob");
     printf("Initial board:\n");
     game_print(&g);
 

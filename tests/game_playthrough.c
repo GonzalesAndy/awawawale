@@ -3,7 +3,7 @@
 
 int main(void) {
     game_t g;
-    game_init(&g);
+    game_init(&g, "Alice", "Bob");
     printf("Starting playthrough (turn: %s)\n", g.turn==PLAYER_A?"A":"B");
     game_print(&g);
 
