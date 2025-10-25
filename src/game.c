@@ -29,6 +29,9 @@ bool game_is_over(const game_t *g) {
 
 void game_print(const game_t *g) {
     // prints the game state
+    printf("Scores: Player A = %d, Player B = %d\n", g->score[0], g->score[1]);
+    printf("Turn: Player %s\n", g->turn == PLAYER_A ? "A" : "B");
+    printf("\n");
         printf("                 Cases\n");
     printf("             11    10    9    8    7    6\n");
     printf("           ┌────┬────┬────┬────┬────┬────┐\n");
@@ -41,7 +44,7 @@ void game_print(const game_t *g) {
     for (int i = 0; i < N_PITS/2; i++) printf(" %2d │", g->pits[i]);
     printf(" Player A \n");
     printf("     jeu   └────┴────┴────┴────┴────┴────┘\n");
-    printf("              0    1    2    3    4    5\n");
+    printf("              0    1    2    3    4    5\n");   
 }
 
 bool game_make_move(game_t *g, player_t p, int pit_index) 
