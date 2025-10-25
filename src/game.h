@@ -28,6 +28,7 @@ typedef struct {
     int pit_index;      // 0..11 index of the pit chosen
 } game_move_t;
 
+
 // Representation of an Awalé game in memory. This contains the board,
 // scores, player names, history and observer metadata. This file only
 // declares the structure and related helper prototypes; behavior is
@@ -57,30 +58,31 @@ typedef struct {
 
 // Initialize a fresh game with default starting seeds. If player names are
 // provided (non-NULL) they will be copied into the game metadata.
-void game_init(game_t *g, const char *player_a_name, const char *player_b_name);
+void game_init(game_t *g, const char *player_a_name, const char *player_b_name);//OK
 
 // Make a move for the given player from pit index. Returns true if move
 // was legal and applied; false otherwise. (Behavior implemented elsewhere.)
-bool game_make_move(game_t *g, player_t p, int pit_index);
+bool game_make_move(game_t *g, player_t p, int pit_index);//OK
 
 // Check whether move would be legal for the given player without applying it.
-bool game_is_move_legal(const game_t *g, player_t p, int pit_index);
+bool game_is_move_legal(const game_t *g, player_t p, int pit_index);//TODO
 
 // Obtain a text representation of the board into the provided buffer.
 // The resulting string is NUL terminated. Returns dest on success.
-char *game_to_string(const game_t *g, char *dest, size_t n);
+
+char *game_to_string(const game_t *g, char *dest, size_t n);//OK
 
 // Print board to stdout (ASCII)
-void game_print(const game_t *g);
+void game_print(const game_t *g);//OK but may need minor changes
 
 // Check whether game is over.
-bool game_is_over(const game_t *g);
+bool game_is_over(const game_t *g);//OK but may need minor changes
 
 // Save a game's record to a persistent storage (append). Returns 0 on success.
-int game_save_record(const game_t *g, const char *path);
+int game_save_record(const char* state, const char *path);//OK
 
 // Load a previously saved game record from path into g. Returns 0 on success.
-int game_load_record(game_t *g, const char *path);
+int game_load_record(game_t *g, const char *path);//TODO
 
 // Helpers to manage observers and private spectator lists
 int game_add_observer(game_t *g, const char *username);

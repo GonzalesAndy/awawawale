@@ -2,12 +2,9 @@
 #include <stdio.h>
 
 int persist_append_game(const game_t *g, const char *logpath) {
-    FILE *f = fopen(logpath, "a");
-    if (!f) return -1;
-    fprintf(f, "Game record:\n");
-    fprintf(f, "Scores: %d %d\n", g->score[0], g->score[1]);
-    for (int i = 0; i < N_PITS; ++i) fprintf(f, "%d ", g->pits[i]);
-    fprintf(f, "\nTurn: %d\n\n", g->turn);
-    fclose(f);
-    return 0;
+    if (!g || !logpath) return -1;
+    char buf[512];
+    if (!game_to_string(g, buf, sizeof buf)) return -1;
+    /* append the single-line serialized state */
+    return game_save_record(buf, logpath);
 }
