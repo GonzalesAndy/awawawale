@@ -209,7 +209,7 @@ int client_run(void)
     int sockfd = -1;
     char line[PROTO_MAX_LINE];
 
-    printf("Awal\u00e9 CLI client. Type 'help' for commands.\n");
+    printf("Awalé CLI client. Type 'help' for commands.\n");
     print_help();
 
     while (1)
@@ -288,7 +288,6 @@ int client_run(void)
                             perror("send");
                         else
                         {
-                            /* update local username immediately (same behavior as before) */
                             strncpy(username, name, sizeof(username) - 1);
                             username[sizeof(username) - 1] = '\0';
                         }
@@ -299,8 +298,7 @@ int client_run(void)
                     char tmp[PROTO_MAX_LINE];
                     strncpy(tmp, out, sizeof(tmp) - 1);
                     tmp[sizeof(tmp) - 1] = '\0';
-                    /* parse: CHALLENGE <from> <to> */
-                    char *tok = strtok(tmp, " "); /* CHALLENGE */
+                    char *tok = strtok(tmp, " ");
                     char *from = strtok(NULL, " ");
                     char *to = strtok(NULL, " \n");
                     if (from && to)
