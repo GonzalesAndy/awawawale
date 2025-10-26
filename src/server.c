@@ -75,6 +75,43 @@ int server_register_user(server_state_t *s, const char *username, int sockfd)
     return -1;
 }
 
+int server_set_user_bio(server_state_t *s, const char *username, const char *bio_text)
+{
+    if (!s || !username || !bio_text)
+        return -1;
+    for (int i = 0; i < SERVER_MAX_USERS; ++i)
+    {
+        if (s->users[i].username[0] != '\0' &&
+            strcmp(s->users[i].username, username) == 0)
+        {
+            strncpy(s->users[i].bio, bio_text, CLIENT_MAX_BIO - 1);
+            s->users[i].bio[CLIENT_MAX_BIO - 1] = '\0';
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int server_show_user_bio(server_state_t *s, const char *requester, const char *target_username, char *out_bio, size_t n)
+{
+    if (!s || !requester || !target_username || !out_bio || n == 0)
+        return -1;
+    for (int i = 0; i < SERVER_MAX_USERS; ++i)
+    {
+        if (s->users[i].username[0] != '\0' &&
+            strcmp(s->users[i].username, target_username) == 0)
+        {
+            /* copy bio into caller buffer */
+            strncpy(out_bio, s->users[i].bio, n - 1);
+            out_bio[n - 1] = '\0';
+            /* also log on server console */
+            printf("Bio of %s:\n%s\n", target_username, s->users[i].bio);
+            return 0;
+        }
+    }
+    return -1;
+}
+
 int server_unregister_user(server_state_t *s, const char *username)
 {
     if (!s || !username)
@@ -303,6 +340,57 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                     char resp[PROTO_MAX_LINE];
                     snprintf(resp, sizeof(resp), "ERROR username %s already in use\n", uname);
                     send(c->fd, resp, strlen(resp), 0);
+                }
+            }
+        }
+        else if (strcmp(cmd, CMD_BIO) == 0)
+        {
+            if (args)
+            {
+                char *username = strtok(args, " ");
+                char *bio_text = strtok(NULL, "");
+                if (username && bio_text)
+                {
+                    if (server_set_user_bio(state, username, bio_text) == 0)
+                    {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "BIO_SET %s\n", username);
+                        send(c->fd, resp, strlen(resp), 0);
+                    }
+                    else
+                    {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "ERROR user %s not found\n", username);
+                        send(c->fd, resp, strlen(resp), 0);
+                    }
+                }
+            }
+        }
+        else if (strcmp(cmd, CMD_BIO_SHOW) == 0)
+        {
+            if (args)
+            {
+                /* proto: BIO_SHOW <requester> <target_username> */
+                char *requester = strtok(args, " ");
+                char *target_username = NULL;
+                if (requester)
+                    target_username = strtok(NULL, " \n");
+                if (target_username)
+                {
+                    char biobuf[CLIENT_MAX_BIO];
+                    if (server_show_user_bio(state, requester, target_username, biobuf, sizeof(biobuf)) == 0)
+                    {
+                        char resp[PROTO_MAX_LINE];
+                        /* send username + bio on one line */
+                        snprintf(resp, sizeof(resp), "BIO_SHOWN %s %s\n", target_username, biobuf);
+                        send(c->fd, resp, strlen(resp), 0);
+                    }
+                    else
+                    {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "ERROR user %s not found\n", target_username);
+                        send(c->fd, resp, strlen(resp), 0);
+                    }
                 }
             }
         }

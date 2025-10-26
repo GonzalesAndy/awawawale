@@ -40,6 +40,8 @@ int server_init(server_state_t *s);
 int server_register_user(server_state_t *s, const char *username, int sockfd);
 int server_unregister_user(server_state_t *s, const char *username);
 int server_list_online_users(server_state_t *s, char dest[][GAME_MAX_USERNAME], int max);
+int server_set_user_bio(server_state_t *s, const char *username, const char *bio_text);
+int server_show_user_bio(server_state_t *s, const char *requester, const char *target_username, char *out_bio, size_t n);
 
 // Challenge management
 int server_create_challenge(server_state_t *s, const char *from, const char *to);

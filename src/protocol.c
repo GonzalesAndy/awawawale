@@ -48,6 +48,18 @@ char *proto_build_register(char *dest, size_t n, const char *name) {
     return dest;
 }
 
+char *proto_build_bio_set(char *dest, size_t n, const char *from, const char *bio_text) {
+    if (!dest || !from || !bio_text) return NULL;
+    snprintf(dest, n, "%s %s %s\n", CMD_BIO, from, bio_text);
+    return dest;
+}
+
+char *proto_build_bio_show(char *dest, size_t n, const char *requester, const char *target_username) {
+    if (!dest || !requester || !target_username) return NULL;
+    snprintf(dest, n, "%s %s %s\n", CMD_BIO_SHOW, requester, target_username);
+    return dest;
+}
+
 char *proto_parse_command(char *line, char **args) {
     if (!line) return NULL;
     size_t L = strlen(line);

@@ -15,8 +15,10 @@
 static void print_help(void)
 {
     printf("Commands:\n");
-    printf("  register <name>       - set your username\n");
     printf("  connect <host> <port> - connect to server\n");
+    printf("  register <name>       - set your username\n");
+    printf("  bio <text>            - set your bio\n");
+    printf("  show_bio <username>   - show a user's bio, if <username> empty show your own\n");
     printf("  list                  - request list of users\n");
     printf("  challenge <user>      - challenge a user\n");
     printf("  accept <user>         - accept a challenge\n");
@@ -97,6 +99,20 @@ int client_send_chat(int sockfd, const char *from, const char *to, const char *m
     return (int)send(sockfd, out, strlen(out), 0);
 }
 
+int client_send_bio_set(int sockfd, const char *from, const char *bio_text)
+{
+    char out[PROTO_MAX_LINE];
+    if (!proto_build_bio_set(out, sizeof(out), from, bio_text)) return -1;
+    return (int)send(sockfd, out, strlen(out), 0);
+}
+
+int client_send_bio_show(int sockfd, const char *requester, const char *target_username)
+{
+    char out[PROTO_MAX_LINE];
+    if (!proto_build_bio_show(out, sizeof(out), requester, target_username)) return -1;
+    return (int)send(sockfd, out, strlen(out), 0);
+}
+
 /* Process a single incoming line from the user and write protocol output
  * into `out`. If a connect command is issued, *sockfd may be updated.
  * Returns true if `out` should be sent to server. */
@@ -154,6 +170,38 @@ static bool client_handle_input(const char *username, const char *line_in, char 
             return false;
         }
         proto_build_register(out, PROTO_MAX_LINE, name);
+        return true;
+    }
+    else if (strcmp(cmd, "bio") == 0)
+    {
+        char *bio_text = strtok(NULL, "");
+        if (!bio_text)
+        {
+            printf("Usage: bio <text>\n");
+            return false;
+        }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        proto_build_bio_set(out, PROTO_MAX_LINE, username, bio_text);
+        return true;
+
+    }
+    else if (strcmp(cmd, "show_bio") == 0)
+    {
+        char *target_username = strtok(NULL, "");
+        if (!target_username)
+        {
+            target_username = (char *)username; /* show own bio if no username given */
+        }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        proto_build_bio_show(out, PROTO_MAX_LINE, username, target_username);
         return true;
     }
     else if (strcmp(cmd, "list") == 0)
