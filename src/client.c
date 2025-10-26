@@ -27,6 +27,20 @@ static void print_help(void)
     printf("  quit                  - exit\n\n\n");
 }
 
+    /* Print the interactive prompt. Uses ANSI colors when available and keeps the
+     * prompt compact so it can be reprinted after asynchronous server messages. */
+    static void print_prompt(const char *username)
+    {
+        const char *GREEN = "\x1b[32m";
+        const char *CYAN = "\x1b[36m";
+        const char *RESET = "\x1b[0m";
+        if (username && username[0] != '\0')
+            printf("%sawalé%s %s%s%s> ", CYAN, RESET, GREEN, username, RESET);
+        else
+            printf("%sawalé%s > ", CYAN, RESET);
+        fflush(stdout);
+    }
+
 /* Helper: connect to host:port returning socket fd or -1 on error */
 static int client_connect_to(const char *host, const char *port)
 {
@@ -122,7 +136,7 @@ static bool client_handle_input(const char *username, const char *line_in, char 
             if (*sockfd != -1)
                 close(*sockfd);
             *sockfd = fd;
-            printf("Connected to %s:%s (fd=%d)\n", host, port, fd);
+            printf("Connected to %s:%s (fd=%d)\r\n", host, port, fd);
         }
         return false;
     }
@@ -136,7 +150,7 @@ static bool client_handle_input(const char *username, const char *line_in, char 
         }
         if (*sockfd == -1)
         {
-            printf("Not connected to a server.\n");
+            printf("Not connected to a server.\r\n");
             return false;
         }
         proto_build_register(out, PROTO_MAX_LINE, name);
@@ -211,6 +225,8 @@ int client_run(void)
 
     printf("Awalé CLI client. Type 'help' for commands.\n");
     print_help();
+        /* initial prompt */
+        print_prompt(username);
 
     while (1)
     {
@@ -241,7 +257,12 @@ int client_run(void)
             if (r > 0)
             {
                 in[r] = '\0';
-                printf("\nServer: %s\n", in);
+                /* Clear current prompt line so we don't leave an empty prompt
+                 * above the server message; then print the server message and
+                 * reprint the prompt. */
+                printf("\r\x1b[2K"); /* carriage return + clear line */
+                printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", in);
+                print_prompt(username);
             }
             else if (r == 0)
             {
@@ -265,14 +286,20 @@ int client_run(void)
             if (len && line[len - 1] == '\n')
                 line[len - 1] = '\0';
             if (strlen(line) == 0)
+            {
+                /* User pressed Enter on an empty line. The terminal already
+                 * emitted a blank line; remove it and reprint the prompt so
+                 * the UI stays compact. */
+                printf("\x1b[1A\x1b[2K"); /* move cursor up and clear the line */
+                print_prompt(username);
                 continue;
+            }
 
             char out[PROTO_MAX_LINE];
             bool send_out = client_handle_input(username, line, out, &sockfd);
 
             if (send_out && out[0] != '\0' && sockfd != -1)
             {
-                /* Prefer using high-level client_send_* wrappers where available */
                 if (strncmp(out, CMD_REGISTER, strlen(CMD_REGISTER)) == 0)
                 {
                     char tmp[PROTO_MAX_LINE];
@@ -298,7 +325,7 @@ int client_run(void)
                     char tmp[PROTO_MAX_LINE];
                     strncpy(tmp, out, sizeof(tmp) - 1);
                     tmp[sizeof(tmp) - 1] = '\0';
-                    char *tok = strtok(tmp, " ");
+                    (void)strtok(tmp, " ");
                     char *from = strtok(NULL, " ");
                     char *to = strtok(NULL, " \n");
                     if (from && to)
@@ -314,9 +341,16 @@ int client_run(void)
                         perror("send");
                 }
             }
-            else if (!send_out && strcmp(line, "quit") == 0)
+            else if (!send_out)
             {
-                break;
+                if (strcmp(line, "quit") == 0)
+                {
+                    break;
+                }
+                /* A local command produced output (e.g. Connected / Not connected)
+                 * — reprint the prompt so the user can continue typing without
+                 * having to press Enter. */
+                print_prompt(username);
             }
         }
     }

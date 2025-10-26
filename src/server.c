@@ -54,6 +54,8 @@ int server_register_user(server_state_t *s, const char *username, int sockfd)
         if (s->users[i].username[0] != '\0' &&
             strcmp(s->users[i].username, username) == 0)
         {
+            if (s->users[i].socket_fd != -1 && s->users[i].socket_fd != sockfd)
+                return -1; /* username already in use by another connection */
             s->users[i].socket_fd = sockfd;
             return 0;
         }
@@ -285,13 +287,23 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                 char uname[GAME_MAX_USERNAME];
                 strncpy(uname, args, sizeof(uname) - 1);
                 uname[sizeof(uname) - 1] = '\0';
-                server_register_user(state, uname, c->fd);
-                strncpy(c->name, uname, sizeof(c->name) - 1);
-                c->name[sizeof(c->name) - 1] = '\0';
-                char resp[PROTO_MAX_LINE];
-                snprintf(resp, sizeof(resp), "REGISTERED %s\n", c->name);
-                send(c->fd, resp, strlen(resp), 0);
-                printf("Client fd=%d registered as %s\n", c->fd, c->name);
+                /* If client already had a different name, unregister it first */
+                if (c->name[0] != '\0' && strcmp(c->name, uname) != 0)
+                {
+                    server_unregister_user(state, c->name);
+                }
+                if (server_register_user(state, uname, c->fd) == 0)
+                {
+                    strncpy(c->name, uname, sizeof(c->name) - 1);
+                    c->name[sizeof(c->name) - 1] = '\0';
+                    char resp[PROTO_MAX_LINE];
+                    snprintf(resp, sizeof(resp), "REGISTERED %s\n", c->name);
+                    send(c->fd, resp, strlen(resp), 0);
+                } else {
+                    char resp[PROTO_MAX_LINE];
+                    snprintf(resp, sizeof(resp), "ERROR username %s already in use\n", uname);
+                    send(c->fd, resp, strlen(resp), 0);
+                }
             }
         }
         else if (strcmp(cmd, CMD_LIST_USERS) == 0)
