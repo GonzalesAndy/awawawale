@@ -3,6 +3,8 @@
 #include "server.h"
 #include "protocol.h"
 #include "game.h"
+#include "persist.h"
+#include <ctype.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +16,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <strings.h> /* for strcasecmp */
 
 #define MAX_CLIENTS 128
 #define ADDRESS_PORT 9987
@@ -25,6 +28,17 @@ typedef struct
     char buf[PROTO_MAX_LINE];
     size_t buf_len;
 } client_t;
+
+static void canonicalize(char *out, const char *in, size_t n){
+    if(!out || n==0){return;}
+    size_t w=0;
+    for(size_t i=0; in && in[i] && w+1<n; ++i){
+        char c=in[i];
+        if(c=='_') c=' ';
+        out[w++]=(char)tolower((unsigned char)c);
+    }
+    out[w]='\0';
+}
 
 /* Simple server API implementations backed by server_state_t */
 int server_init(server_state_t *s)
@@ -491,9 +505,8 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                             }
                             if (gptr)
                             {
-                                /* print to server console */
-                                game_print(gptr, NULL, 0);
-                                /* build client-friendly one-line representation */
+                                
+                                game_print(gptr, gamebuf, sizeof(gamebuf));
                                 proto_build_game_update(update_msg, sizeof(update_msg), gid, gamebuf);
                                 have_update = 1;
                             }
@@ -502,23 +515,53 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                             uint64_t start_ts = (uint64_t)time(NULL) + 3; /* seconds from now */
                             proto_build_game_start_at(start_msg, sizeof(start_msg), gid, start_ts);
 
+                            /* also send a GAME_MODE message so clients switch UI into play mode */
+                            char mode_msg[PROTO_MAX_LINE];
+                            proto_build_game_mode(mode_msg, sizeof(mode_msg), gid, "PLAY");
+
                             /* notify both players via registered user sockets */
                             int notified_count = 0;
                             for (int u = 0; u < SERVER_MAX_USERS; ++u)
                             {
                                 if (state->users[u].username[0] == '\0') continue;
-                                if (strcmp(state->users[u].username, challenger) == 0 || strcmp(state->users[u].username, acceptor) == 0)
+                                if (strcasecmp(state->users[u].username, challenger) == 0 || strcasecmp(state->users[u].username, acceptor) == 0)
                                 {
                                     if (state->users[u].socket_fd != -1)
                                     {
                                         char out[PROTO_MAX_LINE];
                                         snprintf(out, sizeof(out), "ACCEPTED %s %s %lu\n", acceptor, challenger, (unsigned long)gid);
                                         send(state->users[u].socket_fd, out, strlen(out), 0);
-                                        if (have_update)
+                                        if (have_update) {
+                                            /* Debug: log the GAME_UPDATE we are about to send so it's clear who has the turn */
+                                            printf("[DEBUG] sending to fd=%d: %s", state->users[u].socket_fd, update_msg);
                                             send(state->users[u].socket_fd, update_msg, strlen(update_msg), 0);
+                                        }
                                         send(state->users[u].socket_fd, start_msg, strlen(start_msg), 0);
+                                        /* inform client to switch to PLAY mode */
+                                        send(state->users[u].socket_fd, mode_msg, strlen(mode_msg), 0);
                                         notified_count++;
                                     }
+                                }
+                            }
+
+                            /* Also send directly to any connected client sockets in `clients[]`
+                             * (some callers use clients[].name to track active connections).
+                             * This guarantees delivery to local connected clients even if
+                             * server_state user entries are out-of-sync. */
+                            for (int j = 0; j < MAX_CLIENTS; ++j) {
+                                if (clients[j].fd == -1) continue;
+                                if (clients[j].name[0] == '\0') continue;
+                                if (strcmp(clients[j].name, challenger) == 0 || strcmp(clients[j].name, acceptor) == 0) {
+                                    /* send ACCEPTED and initial update/start/mode */
+                                    char out[PROTO_MAX_LINE];
+                                    snprintf(out, sizeof(out), "ACCEPTED %s %s %lu\n", acceptor, challenger, (unsigned long)gid);
+                                    send(clients[j].fd, out, strlen(out), 0);
+                                    if (have_update) {
+                                        printf("[DEBUG] direct send to client fd=%d: %s", clients[j].fd, update_msg);
+                                        send(clients[j].fd, update_msg, strlen(update_msg), 0);
+                                    }
+                                    send(clients[j].fd, start_msg, strlen(start_msg), 0);
+                                    send(clients[j].fd, mode_msg, strlen(mode_msg), 0);
                                 }
                             }
 
@@ -526,8 +569,10 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                             char out2[PROTO_MAX_LINE];
                             snprintf(out2, sizeof(out2), "ACCEPT_SENT %s %s %lu\n", acceptor, challenger, (unsigned long)gid);
                             send(c->fd, out2, strlen(out2), 0);
-                            if (have_update)
+                            if (have_update) {
+                                printf("[DEBUG] reply to acceptor fd=%d: %s", c->fd, update_msg);
                                 send(c->fd, update_msg, strlen(update_msg), 0);
+                            }
                         }
                         else
                         {
@@ -589,6 +634,98 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                 }
             }
         }
+
+
+
+
+        else if (strcmp(cmd, CMD_MOVE) == 0)
+        {
+            if (args)
+            {
+                char *from = strtok(args, " ");
+                char *gid_s = strtok(NULL, " ");
+                char *pit_s = strtok(NULL, " ");
+        if (from && gid_s && pit_s)
+                {
+                    uint64_t gid = (uint64_t)strtoull(gid_s, NULL, 10);
+                    int pit = atoi(pit_s);
+                    game_t *gptr = NULL;
+                    if (server_get_game(state, gid, &gptr) == 0 && gptr)
+                    {
+            /* Debug: show parsed MOVE and current game players to help diagnose name/turn mismatches */
+            printf("MOVE received: from='%s' gid=%lu pit=%d\n", from, (unsigned long)gid, pit);
+            printf("Game players: '%s' '%s' (turn=%c)\n", gptr->player_name[0], gptr->player_name[1], (gptr->turn==PLAYER_A)?'A':'B');
+                        /* determine player index (exact match expected) */
+                        player_t p;
+                        char can_from[GAME_MAX_USERNAME], can_a[GAME_MAX_USERNAME], can_b[GAME_MAX_USERNAME];
+                        canonicalize(can_from, from, sizeof(can_from));
+                        canonicalize(can_a,   gptr->player_name[0], sizeof(can_a));
+                        canonicalize(can_b,   gptr->player_name[1], sizeof(can_b));
+
+                        if (strcmp(gptr->player_name[0], from) == 0 || strcmp(can_a, can_from) == 0) {
+                            p = PLAYER_A;
+                        } else if (strcmp(gptr->player_name[1], from) == 0 || strcmp(can_b, can_from) == 0) {
+                            p = PLAYER_B;
+                        } else {
+                            char resp[PROTO_MAX_LINE];
+                            snprintf(resp, sizeof(resp), "ERROR you are not a player in game %lu\n", (unsigned long)gid);
+                            send(c->fd, resp, strlen(resp), 0);
+                            goto _move_done;
+                        }
+
+                        if (!game_is_move_legal(gptr, p, pit)) {
+                            char resp[PROTO_MAX_LINE];
+                            snprintf(resp, sizeof(resp), "ERROR illegal move %d for player %s\n", pit, from);
+                            send(c->fd, resp, strlen(resp), 0);
+                            goto _move_done;
+                        }
+
+                        if (!game_make_move(gptr, p, pit)) {
+                            char resp[PROTO_MAX_LINE];
+                            snprintf(resp, sizeof(resp), "ERROR failed to apply move\n");
+                            send(c->fd, resp, strlen(resp), 0);
+                            goto _move_done;
+                        } else {
+                            /* acknowledge to mover */
+                            char okmsg[PROTO_MAX_LINE];
+                            snprintf(okmsg, sizeof(okmsg), "MOVE_OK %lu %d\n", (unsigned long)gid, pit);
+                            send(c->fd, okmsg, strlen(okmsg), 0);
+                        }
+
+                        /* broadcast GAME_UPDATE to both players */
+                        char gamebuf[PROTO_MAX_LINE];
+                        char update_msg[PROTO_MAX_LINE];
+                        game_print(gptr, gamebuf, sizeof(gamebuf));
+                        proto_build_game_update(update_msg, sizeof(update_msg), gid, gamebuf);
+
+                        for (int u = 0; u < SERVER_MAX_USERS; ++u) {
+                            if (state->users[u].username[0] == '\0') continue;
+                            if (strcasecmp(state->users[u].username, gptr->player_name[0]) == 0 || strcasecmp(state->users[u].username, gptr->player_name[1]) == 0) {
+                                if (state->users[u].socket_fd != -1) {
+                                    send(state->users[u].socket_fd, update_msg, strlen(update_msg), 0);
+                                }
+                            }
+                        }
+
+                        /* persist and remove finished games */
+                        if (gptr->state == GAME_STATE_FINISHED) {
+                            /* notify players that game finished */
+                            char finish_msg[PROTO_MAX_LINE];
+                            snprintf(finish_msg, sizeof(finish_msg), "GAME_FINISHED %lu %d %d\n", (unsigned long)gid, gptr->score[0], gptr->score[1]);
+                            for (int u = 0; u < SERVER_MAX_USERS; ++u) {
+                                if (state->users[u].username[0] == '\0') continue;
+                                if (strcmp(state->users[u].username, gptr->player_name[0]) == 0 || strcmp(state->users[u].username, gptr->player_name[1]) == 0) {
+                                    if (state->users[u].socket_fd != -1) send(state->users[u].socket_fd, finish_msg, strlen(finish_msg), 0);
+                                }
+                            }
+                            persist_append_game(gptr, "games.log");
+                            server_remove_game(state, gid);
+                        }
+                    }
+                }
+            }
+_move_done: ;
+        }
         else
         {
             char resp[PROTO_MAX_LINE];
@@ -607,6 +744,11 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
         c->buf[0] = '\0';
     c->buf_len = rem;
 }
+
+
+
+
+
 
 
 int server_create_game_from_challenge(server_state_t *s, const char *player_a, const char *player_b, uint64_t *out_game_id){
@@ -630,9 +772,9 @@ int server_create_game_from_challenge(server_state_t *s, const char *player_a, c
     s->games[slot].moves_len = 0;
     s->games[slot].allowed_spectators_count = 0;
 
-    /* print on server console */
+    /* log creation (don't print the board here; clients receive GAME_UPDATE) */
     printf("Game created id=%lu between '%s' and '%s'\n", (unsigned long)gid, player_a, player_b);
-    game_print(&s->games[slot], NULL, 0);
+
 
     if (out_game_id) *out_game_id = gid;
 

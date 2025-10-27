@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <fcntl.h>
 #include <sys/select.h>
+#include <ctype.h>
 #include <time.h>
 
 static void print_help(void)
@@ -31,19 +32,43 @@ static void print_help(void)
     printf("  quit                  - exit\n\n\n");
 }
 
-    /* Print the interactive prompt. Uses ANSI colors when available and keeps the
-     * prompt compact so it can be reprinted after asynchronous server messages. */
-    static void print_prompt(const char *username)
-    {
-        const char *GREEN = "\x1b[32m";
-        const char *CYAN = "\x1b[36m";
-        const char *RESET = "\x1b[0m";
+/* Print the interactive prompt. If the client is in a game, show the mode and
+ * game id so the user knows they are playing. Uses ANSI colors when available.
+ */
+static int client_in_game = 0;
+static uint64_t client_game_id = 0;
+static int client_is_my_turn = 0; /* whether it's this client's turn */
+static void print_prompt(const char *username)
+{
+    const char *GREEN = "\x1b[32m";
+    const char *CYAN = "\x1b[36m";
+    const char *YELLOW = "\x1b[33m";
+    const char *RESET = "\x1b[0m";
+    if (client_in_game) {
+        if (username && username[0] != '\0')
+            printf("%sawalé%s %s%s%s (%sPLAY %lu%s)%s> ", CYAN, RESET, GREEN, username, RESET, YELLOW, (unsigned long)client_game_id, RESET, client_is_my_turn?" [YOUR TURN]":"");
+        else
+            printf("%sawalé%s (%sPLAY %lu%s)%s> ", CYAN, RESET, YELLOW, (unsigned long)client_game_id, RESET, client_is_my_turn?" [YOUR TURN]":"");
+    } else {
         if (username && username[0] != '\0')
             printf("%sawalé%s %s%s%s> ", CYAN, RESET, GREEN, username, RESET);
         else
             printf("%sawalé%s > ", CYAN, RESET);
-        fflush(stdout);
     }
+    fflush(stdout);
+}
+
+/* local canonicalize helper: lower-case and convert '_'->' ' to compare names robustly */
+static void canonicalize_local(char *out, const char *in, size_t n) {
+    if (!out || n == 0) return;
+    size_t w = 0;
+    for (size_t i = 0; in && in[i] && w + 1 < n; ++i) {
+        char c = in[i];
+        if (c == '_') c = ' ';
+        out[w++] = (char)tolower((unsigned char)c);
+    }
+    out[w] = '\0';
+}
 
 /* Helper: connect to host:port returning socket fd or -1 on error */
 static int client_connect_to(const char *host, const char *port)
@@ -259,6 +284,32 @@ static bool client_handle_input(const char *username, const char *line_in, char 
         proto_build_refuse(out, PROTO_MAX_LINE, username, user);
         return true;
     }
+    else if (strcmp(cmd, "move") == 0)
+    {
+        /* move <pit>  (when already in a game) OR move <game-id> <pit> */
+        if (username[0] == '\0') {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *a = strtok(NULL, " ");
+        if (!a) { printf("Usage: move <pit> OR move <game-id> <pit>\n"); return false; }
+        char *b = strtok(NULL, " ");
+        uint64_t gid = 0;
+        int pit = 0;
+        if (b) {
+            gid = (uint64_t)strtoull(a, NULL, 10);
+            pit = atoi(b);
+        } else {
+            if (!client_in_game) { printf("Not currently in a game; specify game id: move <game-id> <pit>\n"); return false; }
+            gid = client_game_id;
+            pit = atoi(a);
+        }
+        /* Build MOVE message with username */
+        if (!proto_build_move(out, PROTO_MAX_LINE, username, gid, pit)) return false;
+        /* mark as waiting until MOVE_OK or next GAME_UPDATE */
+        client_is_my_turn = 0;
+        return true;
+    }
     else
     {
         printf("Unknown command '%s'\n", cmd);
@@ -322,51 +373,75 @@ int client_run(void)
                     printf("\r\x1b[2K"); /* carriage return + clear line */
 
                     if (cmd && strcmp(cmd, CMD_GAME_UPDATE) == 0 && args) {
-                        /* proto: GAME_UPDATE <game_id> <board_text> */
-                        char *gid_s = strtok(args, " ");
-                        char *board_text = strtok(NULL, "");
-                        if (board_text) {
+                        /* proto: GAME_UPDATE <game_id> <board_text>
+                         * Use a local copy of board_text and strtok_r to avoid
+                         * clobbering tmp or interfering with other tokenizers.
+                         */
+                        char *gid_s = args;
+                        char *space = strchr(args, ' ');
+                        char *board_text = NULL;
+                        if (space) { *space = '\0'; board_text = space + 1; }
+                        if (board_text && board_text[0] != '\0') {
                             printf("%sGame update:%s (game %s)\n", "\x1b[35m", "\x1b[0m", gid_s ? gid_s : "?");
-                            /* pretty-print the compact board text */
-                            // parse board_text into a local game_t and print
                             game_t g;
                             memset(&g, 0, sizeof(g));
-                            char *bt = board_text;
-                            char *tok = NULL;
-                            int idx = 0;
-                            // tokens: id turn scoreA scoreB pits[0..11] moves_len state nameA nameB
-                            tok = strtok(bt, " ");
+
+                            /* make a safe copy of board_text to tokenize */
+                            char bt_copy[PROTO_MAX_LINE];
+                            strncpy(bt_copy, board_text, sizeof(bt_copy)-1);
+                            bt_copy[sizeof(bt_copy)-1] = '\0';
+
+                            char *save = NULL;
+                            char *tok = strtok_r(bt_copy, " ", &save);
+                            if (tok) { g.id = (uint64_t)strtoull(tok, NULL, 10); tok = strtok_r(NULL, " ", &save); }
                             if (tok) {
-                                g.id = (uint64_t)strtoull(tok, NULL, 10);
-                                tok = strtok(NULL, " ");
-                            }
-                            if (tok) {
-                                // turn: 'A' or 'B'
                                 if (tok[0] == 'A') g.turn = PLAYER_A;
                                 else if (tok[0] == 'B') g.turn = PLAYER_B;
                                 else g.turn = PLAYER_A;
-                                tok = strtok(NULL, " ");
+                                tok = strtok_r(NULL, " ", &save);
                             }
-                            if (tok) { g.score[0] = atoi(tok); tok = strtok(NULL, " "); }
-                            if (tok) { g.score[1] = atoi(tok); tok = strtok(NULL, " "); }
-                            for (int i = 0; i < N_PITS && tok; ++i) {
-                                g.pits[i] = atoi(tok);
-                                tok = strtok(NULL, " ");
-                            }
-                            /* remaining tokens are optional; we only care about player names */
-                            // try to find last two tokens as player names
+                            if (tok) { g.score[0] = atoi(tok); tok = strtok_r(NULL, " ", &save); }
+                            if (tok) { g.score[1] = atoi(tok); tok = strtok_r(NULL, " ", &save); }
+                            for (int i = 0; i < N_PITS && tok; ++i) { g.pits[i] = atoi(tok); tok = strtok_r(NULL, " ", &save); }
+
+                            /* consume moves_len and state if present */
+                            if (tok) { /* moves_len */ tok = strtok_r(NULL, " ", &save); }
+                            if (tok) { /* state */ tok = strtok_r(NULL, " ", &save); }
+
                             char *last_a = NULL, *last_b = NULL;
-                            // walk remaining tokens
-                            while (tok) {
-                                last_a = last_b;
-                                last_b = tok;
-                                tok = strtok(NULL, " ");
+                            while (tok) { last_a = last_b; last_b = tok; tok = strtok_r(NULL, " ", &save); }
+                            if (last_a) {
+                                strncpy(g.player_name[0], last_a, GAME_MAX_USERNAME-1);
+                                g.player_name[0][GAME_MAX_USERNAME-1] = '\0';
+                                for (size_t i = 0; g.player_name[0][i]; ++i) if (g.player_name[0][i]=='_') g.player_name[0][i]=' ';
                             }
-                            if (last_a) strncpy(g.player_name[0], last_a, GAME_MAX_USERNAME-1);
-                            if (last_b) strncpy(g.player_name[1], last_b, GAME_MAX_USERNAME-1);
+                            if (last_b) {
+                                strncpy(g.player_name[1], last_b, GAME_MAX_USERNAME-1);
+                                g.player_name[1][GAME_MAX_USERNAME-1] = '\0';
+                                for (size_t i = 0; g.player_name[1][i]; ++i) if (g.player_name[1][i]=='_') g.player_name[1][i]=' ';
+                            }
+
+                            /* mark in-game and set id */
+                            if (gid_s) { client_in_game = 1; client_game_id = (uint64_t)strtoull(gid_s, NULL, 10); }
 
                             /* print using game_print ASCII path */
                             game_print(&g, NULL, 0);
+
+                            /* Decide if it's this client's turn; use canonicalized compare */
+                            if (username[0] != '\0') {
+                                char can_u[GAME_MAX_USERNAME];
+                                char can_a[GAME_MAX_USERNAME];
+                                char can_b[GAME_MAX_USERNAME];
+                                canonicalize_local(can_u, username, sizeof(can_u));
+                                canonicalize_local(can_a, g.player_name[0], sizeof(can_a));
+                                canonicalize_local(can_b, g.player_name[1], sizeof(can_b));
+                                if ((g.turn == PLAYER_A && strcmp(can_u, can_a) == 0) ||
+                                    (g.turn == PLAYER_B && strcmp(can_u, can_b) == 0)) {
+                                    client_is_my_turn = 1;
+                                } else {
+                                    client_is_my_turn = 0;
+                                }
+                            }
                         } else {
                             printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", ln);
                         }
@@ -386,6 +461,23 @@ int client_run(void)
                             }
                         } else {
                             printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", ln);
+                        }
+                    } else if (cmd && strcmp(cmd, "ACCEPTED") == 0 && args) {
+                        /* Server informed us a challenge was accepted: ACCEPTED <acceptor> <challenger> <gid>
+                         * If we're one of the players, mark as in-game so shorthand moves work. */
+                        char *acceptor = strtok(args, " ");
+                        char *challenger = strtok(NULL, " ");
+                        char *gid_s = strtok(NULL, " \n");
+                        if (gid_s) {
+                            uint64_t gid = (uint64_t)strtoull(gid_s, NULL, 10);
+                            if (acceptor && challenger) {
+                                /* match our username (case-sensitive for now) */
+                                if (username[0] != '\0' && (strcmp(username, acceptor) == 0 || strcmp(username, challenger) == 0)) {
+                                    client_in_game = 1;
+                                    client_game_id = gid;
+                                    printf("%sNow in PLAY mode for game %lu (accepted) %s\n", "\x1b[33m", (unsigned long)gid, "\x1b[0m");
+                                }
+                            }
                         }
                     } else {
                         /* fallback: unknown command or plain server text */

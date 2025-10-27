@@ -37,6 +37,7 @@ char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, c
 char *proto_build_register(char *dest, size_t n, const char *name);
 char *proto_build_game_update(char *dest, size_t n, uint64_t game_id, const char *board_text);
 char *proto_build_game_start_at(char *dest, size_t n, uint64_t game_id, uint64_t start_ts);
+char *proto_build_game_mode(char *dest, size_t n, uint64_t game_id, const char *mode);
 char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_stop_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_bio_set(char *dest, size_t n, const char *from, const char *bio_text);

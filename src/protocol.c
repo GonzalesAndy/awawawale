@@ -89,3 +89,11 @@ char *proto_build_game_start_at(char *dest, size_t n, uint64_t game_id, uint64_t
     snprintf(dest, n, "%s %lu %lu\n", CMD_GAME_START_AT, (unsigned long)game_id, (unsigned long)start_ts);
     return dest;
 }
+
+char *proto_build_game_mode(char *dest, size_t n, uint64_t game_id, const char *mode) {
+    if (!dest || !mode) return NULL;
+    snprintf(dest, n, "%s %lu %s\n", CMD_GAME_UPDATE[0]=='\0'?"GAME_MODE":CMD_GAME_UPDATE, (unsigned long)game_id, mode);
+    /* Above line uses CMD_GAME_UPDATE fallback only to avoid including new macro; better to use literal */
+    snprintf(dest, n, "%s %lu %s\n", "GAME_MODE", (unsigned long)game_id, mode);
+    return dest;
+}

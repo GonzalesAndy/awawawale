@@ -136,3 +136,54 @@ bool game_is_move_legal(const game_t *g, player_t p, int pit_index) {
 }
 
 
+/* Serialize a compact single-line representation of the game suitable
+ * for sending to clients. The format is:
+ *  <id> <turn> <scoreA> <scoreB> <p0> ... <p11> <moves_len> <state> <nameA> <nameB>
+ * Player names will have spaces replaced by underscores to keep tokens
+ * single-word.
+ */
+char *game_to_string(const game_t *g, char *dest, size_t n) {
+    if (!g || !dest || n == 0) return dest;
+    size_t pos = 0;
+    int r = snprintf(dest + pos, (pos < n) ? (n - pos) : 0,
+                     "%llu %c %d %d",
+                     (unsigned long long)g->id,
+                     (g->turn == PLAYER_A) ? 'A' : (g->turn == PLAYER_B) ? 'B' : '?',
+                     g->score[0], g->score[1]);
+    if (r < 0) { dest[0] = '\0'; return dest; }
+    pos += (size_t)r;
+
+    for (int i = 0; i < N_PITS; ++i) {
+        if (pos >= n) break;
+        r = snprintf(dest + pos, n - pos, " %d", g->pits[i]);
+        if (r < 0) break;
+        pos += (size_t)r;
+    }
+
+    if (pos < n) {
+        r = snprintf(dest + pos, n - pos, " %d %d", g->moves_len, (int)g->state);
+        if (r > 0) pos += (size_t)r;
+    }
+
+    /* Append sanitized player names */
+    char a[GAME_MAX_USERNAME+1] = {0};
+    char b[GAME_MAX_USERNAME+1] = {0};
+    if (g->player_name[0][0]) {
+        strncpy(a, g->player_name[0], GAME_MAX_USERNAME);
+        a[GAME_MAX_USERNAME] = '\0';
+        for (size_t i = 0; a[i]; ++i) if (a[i] == ' ') a[i] = '_';
+    }
+    if (g->player_name[1][0]) {
+        strncpy(b, g->player_name[1], GAME_MAX_USERNAME);
+        b[GAME_MAX_USERNAME] = '\0';
+        for (size_t i = 0; b[i]; ++i) if (b[i] == ' ') b[i] = '_';
+    }
+    if (pos < n) {
+        snprintf(dest + pos, n - pos, " %s %s", a, b);
+    }
+
+    dest[n-1] = '\0';
+    return dest;
+}
+
+
