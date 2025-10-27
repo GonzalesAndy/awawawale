@@ -5,10 +5,6 @@
 #include "server.h"
 #include "protocol.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define SERVER_NET_MAX_CLIENTS 128
 
 // Per-connection state for the network layer
@@ -21,9 +17,5 @@ typedef struct {
 
 // Start the server loop and block; returns 0 on clean shutdown, >0 on error
 int server_run(int port);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // SERVER_NET_H
