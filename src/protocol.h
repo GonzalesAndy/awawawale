@@ -12,6 +12,7 @@
 #define CMD_REGISTER "REGISTER"
 #define CMD_USERS "USERS"
 #define CMD_GAME_UPDATE "GAME_UPDATE"
+#define CMD_GAME_START_AT "GAME_START_AT"
 #define CMD_OBSERVE "OBSERVE"
 #define CMD_STOP_OBSERVE "STOP_OBSERVE"
 #define CMD_BIO "BIO"
@@ -35,6 +36,7 @@ char *proto_build_move(char *dest, size_t n, const char *from, uint64_t game_id,
 char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, const char *msg);
 char *proto_build_register(char *dest, size_t n, const char *name);
 char *proto_build_game_update(char *dest, size_t n, uint64_t game_id, const char *board_text);
+char *proto_build_game_start_at(char *dest, size_t n, uint64_t game_id, uint64_t start_ts);
 char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_stop_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_bio_set(char *dest, size_t n, const char *from, const char *bio_text);

@@ -70,8 +70,12 @@ bool game_is_move_legal(const game_t *g, player_t p, int pit_index);
 // The resulting string is NUL terminated. Returns dest on success.
 char *game_to_string(const game_t *g, char *dest, size_t n);
 
-// Print board to stdout (ASCII)
-void game_print(const game_t *g);
+// Print board to stdout (ASCII) or write a compact client-friendly
+// representation into the provided destination buffer.
+// If dest is NULL or n == 0 the function prints the ASCII board to stdout.
+// If dest is non-NULL it writes a single-line representation into dest
+// (NUL-terminated) suitable for sending to clients.
+void game_print(const game_t *g, char *dest, size_t n);
 
 // Check whether game is over.
 bool game_is_over(const game_t *g);

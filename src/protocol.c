@@ -73,3 +73,19 @@ char *proto_parse_command(char *line, char **args) {
     }
     return line;
 }
+
+/* Build a GAME_UPDATE line: "GAME_UPDATE <game_id> <board_text>\n" */
+char *proto_build_game_update(char *dest, size_t n, uint64_t game_id, const char *board_text) {
+    if (!dest || !board_text) return NULL;
+    /* board_text is expected to be a single-line representation (no newlines)
+     * We simply format: CMD_GAME_UPDATE <id> <board_text>\n */
+    snprintf(dest, n, "%s %lu %s\n", CMD_GAME_UPDATE, (unsigned long)game_id, board_text);
+    return dest;
+}
+
+/* Build a GAME_START_AT line: "GAME_START_AT <game_id> <start_ts>\n" */
+char *proto_build_game_start_at(char *dest, size_t n, uint64_t game_id, uint64_t start_ts) {
+    if (!dest) return NULL;
+    snprintf(dest, n, "%s %lu %lu\n", CMD_GAME_START_AT, (unsigned long)game_id, (unsigned long)start_ts);
+    return dest;
+}

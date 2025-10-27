@@ -7,14 +7,14 @@ int main(void) {
     game_t g;
     game_init(&g, "Alice", "Bob");
     printf("Starting playthrough (turn: %s)\n", g.turn==PLAYER_A?"A":"B");
-    game_print(&g);
+    game_print(&g, NULL, 0);
 
     char line[128];
     int move_count = 0;
 
     while (!game_is_over(&g)) {
         printf("\nTurn %d - Player %s\n", move_count+1, g.turn==PLAYER_A?"A":"B");
-        game_print(&g);
+    game_print(&g, NULL, 0);
         printf("Enter pit index to play (or 'q' to quit): ");
         if (!fgets(line, sizeof line, stdin)) {
             printf("Input error or EOF, exiting.\n");

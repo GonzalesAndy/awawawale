@@ -2,6 +2,7 @@
 
 #include "server.h"
 #include "protocol.h"
+#include "game.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -464,27 +465,74 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                 {
                     uint64_t gid = 0;
                     int rv = server_accept_challenge(state, challenger, acceptor, &gid);
+
                     if (rv == 0)
                     {
-                        int notified = 0;
-                        for (int j = 0; j < MAX_CLIENTS; ++j)
+                        
+                        /* Create the game and notify both players (and send start timestamp) */
+                        int create_rv = server_create_game_from_challenge(state, challenger, acceptor, &gid);
+
+                        /* If created, build initial GAME_UPDATE and a GAME_START_AT timestamp */
+                        char gamebuf[PROTO_MAX_LINE];
+                        char update_msg[PROTO_MAX_LINE];
+                        char start_msg[PROTO_MAX_LINE];
+                        int have_update = 0;
+                        if (create_rv == 0)
                         {
-                            if (clients[j].fd != -1 && strcmp(clients[j].name, challenger) == 0)
+                            /* find created game by id and stringify */
+                            game_t *gptr = NULL;
+                            for (int gi = 0; gi < SERVER_MAX_GAMES; ++gi)
                             {
-                                char out[PROTO_MAX_LINE];
-                                snprintf(out, sizeof(out), "ACCEPTED %s %s %lu\n", acceptor, challenger, gid);
-                                send(clients[j].fd, out, strlen(out), 0);
-                                notified = 1;
-                                break;
+                                if (state->games[gi].id == gid)
+                                {
+                                    gptr = &state->games[gi];
+                                    break;
+                                }
                             }
+                            if (gptr)
+                            {
+                                /* print to server console */
+                                game_print(gptr, NULL, 0);
+                                /* build client-friendly one-line representation */
+                                proto_build_game_update(update_msg, sizeof(update_msg), gid, gamebuf);
+                                have_update = 1;
+                            }
+
+                            /* non-blocking countdown: tell clients when the game will start */
+                            uint64_t start_ts = (uint64_t)time(NULL) + 3; /* seconds from now */
+                            proto_build_game_start_at(start_msg, sizeof(start_msg), gid, start_ts);
+
+                            /* notify both players via registered user sockets */
+                            int notified_count = 0;
+                            for (int u = 0; u < SERVER_MAX_USERS; ++u)
+                            {
+                                if (state->users[u].username[0] == '\0') continue;
+                                if (strcmp(state->users[u].username, challenger) == 0 || strcmp(state->users[u].username, acceptor) == 0)
+                                {
+                                    if (state->users[u].socket_fd != -1)
+                                    {
+                                        char out[PROTO_MAX_LINE];
+                                        snprintf(out, sizeof(out), "ACCEPTED %s %s %lu\n", acceptor, challenger, (unsigned long)gid);
+                                        send(state->users[u].socket_fd, out, strlen(out), 0);
+                                        if (have_update)
+                                            send(state->users[u].socket_fd, update_msg, strlen(update_msg), 0);
+                                        send(state->users[u].socket_fd, start_msg, strlen(start_msg), 0);
+                                        notified_count++;
+                                    }
+                                }
+                            }
+
+                            /* reply to the acceptor connection */
+                            char out2[PROTO_MAX_LINE];
+                            snprintf(out2, sizeof(out2), "ACCEPT_SENT %s %s %lu\n", acceptor, challenger, (unsigned long)gid);
+                            send(c->fd, out2, strlen(out2), 0);
+                            if (have_update)
+                                send(c->fd, update_msg, strlen(update_msg), 0);
                         }
-                        char out2[PROTO_MAX_LINE];
-                        snprintf(out2, sizeof(out2), "ACCEPT_SENT %s %s %lu\n", acceptor, challenger, gid);
-                        send(c->fd, out2, strlen(out2), 0);
-                        if (!notified)
+                        else
                         {
                             char resp[PROTO_MAX_LINE];
-                            snprintf(resp, sizeof(resp), "WARNING challenger %s not online\n", challenger);
+                            snprintf(resp, sizeof(resp), "ERROR could not create game (server full)\n");
                             send(c->fd, resp, strlen(resp), 0);
                         }
                     }
@@ -494,6 +542,8 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                         snprintf(resp, sizeof(resp), "ERROR No active challenge from %s to %s\n", challenger, acceptor);
                         send(c->fd, resp, strlen(resp), 0);
                     }
+                    
+
                 }
             }
         }
@@ -558,6 +608,101 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
     c->buf_len = rem;
 }
 
+
+int server_create_game_from_challenge(server_state_t *s, const char *player_a, const char *player_b, uint64_t *out_game_id){
+    if (!s || !player_a || !player_b)
+        return -1;
+    if (s->games_count >= SERVER_MAX_GAMES)
+        return -1;
+
+    uint64_t gid = 0;
+    if (out_game_id && *out_game_id != 0) {
+        gid = *out_game_id;
+    } else {
+        gid = s->next_game_id++;
+    }
+
+    /* append at next slot (simple allocation) */
+    int slot = s->games_count;
+    s->games[slot].id = gid;
+    game_init(&s->games[slot], player_a, player_b);
+    s->games[slot].state = GAME_STATE_ONGOING;
+    s->games[slot].moves_len = 0;
+    s->games[slot].allowed_spectators_count = 0;
+
+    /* print on server console */
+    printf("Game created id=%lu between '%s' and '%s'\n", (unsigned long)gid, player_a, player_b);
+    game_print(&s->games[slot], NULL, 0);
+
+    if (out_game_id) *out_game_id = gid;
+
+    /* wire into users' active_games lists */
+    for (int i = 0; i < SERVER_MAX_USERS; ++i) {
+        if (s->users[i].username[0] == '\0') continue;
+        if (strcmp(s->users[i].username, player_a) == 0 || strcmp(s->users[i].username, player_b) == 0) {
+            int found = 0;
+            for (int j = 0; j < s->users[i].active_games_count; ++j) {
+                if (s->users[i].active_games[j] == gid) { found = 1; break; }
+            }
+            if (!found && s->users[i].active_games_count < (int)(sizeof(s->users[i].active_games)/sizeof(s->users[i].active_games[0]))) {
+                s->users[i].active_games[s->users[i].active_games_count++] = gid;
+            }
+        }
+    }
+
+    s->games_count++;
+    return 0;
+}
+
+int server_get_game(server_state_t *s, uint64_t game_id, game_t **out)
+{
+    if (!s || !out) return -1;
+    for (int i = 0; i < SERVER_MAX_GAMES; ++i) {
+        if (s->games[i].id == game_id && s->games[i].state == GAME_STATE_ONGOING) {
+            *out = &s->games[i];
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int server_remove_game(server_state_t *s, uint64_t game_id)
+{
+    if (!s) return -1;
+    for (int i = 0; i < SERVER_MAX_GAMES; ++i) {
+        if (s->games[i].id == game_id) {
+            /* clear slot */
+            s->games[i].id = 0;
+            s->games[i].state = GAME_STATE_FINISHED;
+            s->games[i].moves_len = 0;
+            s->games[i].player_name[0][0] = '\0';
+            s->games[i].player_name[1][0] = '\0';
+            s->games[i].private_mode = false;
+            for (int j = 0; j < GAME_MAX_OBSERVERS; ++j) s->games[i].allowed_spectators[j][0] = '\0';
+            s->games[i].allowed_spectators_count = 0;
+            if (s->games_count > 0) s->games_count--;
+
+            /* remove from users' active_games */
+            for (int u = 0; u < SERVER_MAX_USERS; ++u) {
+                if (s->users[u].username[0] == '\0') continue;
+                int idx = -1;
+                for (int k = 0; k < s->users[u].active_games_count; ++k) {
+                    if (s->users[u].active_games[k] == game_id) { idx = k; break; }
+                }
+                if (idx != -1) {
+                    for (int k = idx; k + 1 < s->users[u].active_games_count; ++k)
+                        s->users[u].active_games[k] = s->users[u].active_games[k + 1];
+                    s->users[u].active_games_count--;
+                }
+            }
+
+            return 0;
+        }
+    }
+    return -1;
+}
+
+
 int server_run(int port)
 {
     int listen_fd = create_and_bind(port);
@@ -613,6 +758,9 @@ int server_run(int port)
     close(listen_fd);
     return 0;
 }
+
+
+
 
 int main(int argc, char **argv)
 {

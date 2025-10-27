@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200112L
 #include "client.h"
 #include <stdio.h>
+#include "game.h"
 
 #include "protocol.h"
 #include <string.h>
@@ -11,6 +12,7 @@
 #include <netdb.h>
 #include <fcntl.h>
 #include <sys/select.h>
+#include <time.h>
 
 static void print_help(void)
 {
@@ -305,12 +307,94 @@ int client_run(void)
             if (r > 0)
             {
                 in[r] = '\0';
-                /* Clear current prompt line so we don't leave an empty prompt
-                 * above the server message; then print the server message and
-                 * reprint the prompt. */
-                printf("\r\x1b[2K"); /* carriage return + clear line */
-                printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", in);
-                print_prompt(username);
+                /* Handle potentially multiple lines in `in` */
+                char *saveptr = NULL;
+                char *ln = strtok_r(in, "\n", &saveptr);
+                while (ln) {
+                    char *args = NULL;
+                    /* parse command */
+                    char tmp[PROTO_MAX_LINE];
+                    strncpy(tmp, ln, sizeof(tmp)-1);
+                    tmp[sizeof(tmp)-1] = '\0';
+                    char *cmd = proto_parse_command(tmp, &args);
+
+                    /* Clear current prompt line before printing an async message */
+                    printf("\r\x1b[2K"); /* carriage return + clear line */
+
+                    if (cmd && strcmp(cmd, CMD_GAME_UPDATE) == 0 && args) {
+                        /* proto: GAME_UPDATE <game_id> <board_text> */
+                        char *gid_s = strtok(args, " ");
+                        char *board_text = strtok(NULL, "");
+                        if (board_text) {
+                            printf("%sGame update:%s (game %s)\n", "\x1b[35m", "\x1b[0m", gid_s ? gid_s : "?");
+                            /* pretty-print the compact board text */
+                            // parse board_text into a local game_t and print
+                            game_t g;
+                            memset(&g, 0, sizeof(g));
+                            char *bt = board_text;
+                            char *tok = NULL;
+                            int idx = 0;
+                            // tokens: id turn scoreA scoreB pits[0..11] moves_len state nameA nameB
+                            tok = strtok(bt, " ");
+                            if (tok) {
+                                g.id = (uint64_t)strtoull(tok, NULL, 10);
+                                tok = strtok(NULL, " ");
+                            }
+                            if (tok) {
+                                // turn: 'A' or 'B'
+                                if (tok[0] == 'A') g.turn = PLAYER_A;
+                                else if (tok[0] == 'B') g.turn = PLAYER_B;
+                                else g.turn = PLAYER_A;
+                                tok = strtok(NULL, " ");
+                            }
+                            if (tok) { g.score[0] = atoi(tok); tok = strtok(NULL, " "); }
+                            if (tok) { g.score[1] = atoi(tok); tok = strtok(NULL, " "); }
+                            for (int i = 0; i < N_PITS && tok; ++i) {
+                                g.pits[i] = atoi(tok);
+                                tok = strtok(NULL, " ");
+                            }
+                            /* remaining tokens are optional; we only care about player names */
+                            // try to find last two tokens as player names
+                            char *last_a = NULL, *last_b = NULL;
+                            // walk remaining tokens
+                            while (tok) {
+                                last_a = last_b;
+                                last_b = tok;
+                                tok = strtok(NULL, " ");
+                            }
+                            if (last_a) strncpy(g.player_name[0], last_a, GAME_MAX_USERNAME-1);
+                            if (last_b) strncpy(g.player_name[1], last_b, GAME_MAX_USERNAME-1);
+
+                            /* print using game_print ASCII path */
+                            game_print(&g, NULL, 0);
+                        } else {
+                            printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", ln);
+                        }
+                    } else if (cmd && strcmp(cmd, CMD_GAME_START_AT) == 0 && args) {
+                        /* proto: GAME_START_AT <game_id> <start_ts> */
+                        char *gid_s = strtok(args, " ");
+                        char *ts_s = strtok(NULL, " ");
+                        if (ts_s) {
+                            time_t start = (time_t)strtoull(ts_s, NULL, 10);
+                            time_t now = time(NULL);
+                            long diff = (long)difftime(start, now);
+                            if (diff > 0) {
+                                printf("%sGame %s will start in %ld second(s)%s\n",
+                                       "\x1b[33m", gid_s?gid_s:"?", diff, "\x1b[0m");
+                            } else {
+                                printf("%sGame %s starting now%s\n", "\x1b[33m", gid_s?gid_s:"?", "\x1b[0m");
+                            }
+                        } else {
+                            printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", ln);
+                        }
+                    } else {
+                        /* fallback: unknown command or plain server text */
+                        printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", ln);
+                    }
+
+                    print_prompt(username);
+                    ln = strtok_r(NULL, "\n", &saveptr);
+                }
             }
             else if (r == 0)
             {

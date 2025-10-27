@@ -43,24 +43,34 @@ bool game_is_over(const game_t *g) {
     return false;
 }
 
-void game_print(const game_t *g) {
-    // prints the game state
+void game_print(const game_t *g, char *dest, size_t n) {
+    if (!g) return;
+
+    /* If dest is provided, write the compact client-friendly
+     * single-line representation (reuse game_to_string).
+     */
+    if (dest != NULL && n > 0) {
+        game_to_string(g, dest, n);
+        return;
+    }
+
+    /* Otherwise, print the ASCII art board to stdout (legacy behavior). */
     printf("Scores: Player A = %d, Player B = %d\n", g->score[0], g->score[1]);
     printf("Turn: Player %s\n", g->turn == PLAYER_A ? "A" : "B");
     printf("\n");
-        printf("                 Cases\n");
+    printf("                 Cases\n");
     printf("             11    10    9    8    7    6\n");
     printf("           ┌────┬────┬────┬────┬────┬────┐\n");
     printf(" Player B  |");
     for (int i = N_PITS - 1; i >= N_PITS/2; i--) printf(" %2d │", g->pits[i]);
-    
+
     printf("  ← sens de jeu\n");
     printf("           ├────┼────┼────┼────┼────┼────┤\n");
     printf(" → sens de │");
     for (int i = 0; i < N_PITS/2; i++) printf(" %2d │", g->pits[i]);
     printf(" Player A \n");
     printf("     jeu   └────┴────┴────┴────┴────┴────┘\n");
-    printf("              0    1    2    3    4    5\n");   
+    printf("              0    1    2    3    4    5\n");
 }
 
 bool game_make_move(game_t *g, player_t p, int pit_index) 
@@ -124,4 +134,5 @@ bool game_is_move_legal(const game_t *g, player_t p, int pit_index) {
     if (g->pits[pit_index] == 0) return false;
     return true;
 }
+
 
