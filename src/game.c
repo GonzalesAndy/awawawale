@@ -43,25 +43,51 @@ bool game_is_over(const game_t *g) {
     return false;
 }
 
-void game_print(const game_t *g) {
-    // prints the game state
-    printf("Scores: Player A = %d, Player B = %d\n", g->score[0], g->score[1]);
-    printf("Turn: Player %s\n", g->turn == PLAYER_A ? "A" : "B");
-    printf("\n");
-        printf("                 Cases\n");
-    printf("             11    10    9    8    7    6\n");
-    printf("           ┌────┬────┬────┬────┬────┬────┐\n");
-    printf(" Player B  |");
-    for (int i = N_PITS - 1; i >= N_PITS/2; i--) printf(" %2d │", g->pits[i]);
-    
-    printf("  ← sens de jeu\n");
-    printf("           ├────┼────┼────┼────┼────┼────┤\n");
-    printf(" → sens de │");
-    for (int i = 0; i < N_PITS/2; i++) printf(" %2d │", g->pits[i]);
-    printf(" Player A \n");
-    printf("     jeu   └────┴────┴────┴────┴────┴────┘\n");
-    printf("              0    1    2    3    4    5\n");   
+
+
+int game_print(const game_t *g, char *out, size_t out_size) {
+    if (!g || !out || out_size == 0) return -1;
+
+    char *p = out;
+    size_t left = out_size;
+    int written = 0;
+
+    #define APPEND(fmt, ...) do { \
+        int nw = snprintf(p, left, fmt, ##__VA_ARGS__); \
+        if (nw < 0) { written = -1; goto gp_done; } \
+        if ((size_t)nw >= left) { /* truncated */ p += left - 1; left = 1; written += (int)(left - 1); } \
+        else { p += nw; left -= (size_t)nw; written += nw; } \
+    } while(0)
+
+    APPEND("Player A: %s\n", g->player_name[0]);
+    APPEND("Player B: %s\n", g->player_name[1]);
+    APPEND("Scores: Player A = %d, Player B = %d\n", g->score[0], g->score[1]);
+    APPEND("Turn: Player %s\n", g->turn == PLAYER_A ? "A" : "B");
+    APPEND("\n");
+    APPEND("                 Cases\n");
+    APPEND("             11    10    9    8    7    6\n");
+    APPEND("           ┌────┬────┬────┬────┬────┬────┐\n");
+    APPEND(" Player B  |");
+    for (int i = N_PITS - 1; i >= N_PITS/2; i--) {
+        APPEND(" %2d │", g->pits[i]);
+    }
+    APPEND("  ← sens de jeu\n");
+    APPEND("           ├────┼────┼────┼────┼────┼────┤\n");
+    APPEND(" → sens de │");
+    for (int i = 0; i < N_PITS/2; i++) {
+        APPEND(" %2d │", g->pits[i]);
+    }
+    APPEND(" Player A \n");
+    APPEND("     jeu   └────┴────┴────┴────┴────┴────┘\n");
+    APPEND("              0    1    2    3    4    5\n");
+
+gp_done:
+    /* ensure NUL termination */
+    if (out_size > 0) out[out_size-1] = '\0';
+    #undef APPEND
+    return written;
 }
+
 
 bool game_make_move(game_t *g, player_t p, int pit_index) 
 {

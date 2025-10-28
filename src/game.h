@@ -70,10 +70,12 @@ bool game_is_move_legal(const game_t *g, player_t p, int pit_index);
 // The resulting string is NUL terminated. Returns dest on success.
 char *game_to_string(const game_t *g, char *dest, size_t n);
 
-// Print board to stdout (ASCII)
-void game_print(const game_t *g);
+// Render board ASCII into the provided buffer. The function will NUL-terminate
+// the buffer and return the number of bytes written (not including the NUL).
+// If out is NULL or out_size is zero, the function returns -1.
+int game_print(const game_t *g, char *out, size_t out_size);
 
-// Check whether game is over.
+// Check whether game is over.s
 bool game_is_over(const game_t *g);
 
 // Save a game's record to a persistent storage (append). Returns 0 on success.

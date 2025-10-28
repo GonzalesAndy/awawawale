@@ -246,6 +246,26 @@ static int create_and_bind(int port)
     return sfd;
 }
 
+/* send_all: ensure the entire buffer is transmitted over the socket.
+ * Returns the number of bytes sent on success, -1 on error.
+ */
+static ssize_t send_all(int fd, const void *buf, size_t len)
+{
+    const char *p = buf;
+    size_t left = len;
+    while (left > 0) {
+        ssize_t n = send(fd, p, left, 0);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+        p += n;
+        left -= (size_t)n;
+    }
+    return (ssize_t)len;
+}
+
 static void client_init(client_t *c)
 {
     c->fd = -1;
@@ -279,6 +299,49 @@ static void server_accept_new(int listen_fd, client_t *clients, int max_clients)
             printf("Accepted connection fd=%d\n", cfd);
     }
 }
+
+int server_create_game_from_challenge(server_state_t *s, const char *player_a, const char *player_b, uint64_t *out_game_id){
+    // Validate inputs
+    if (!s || !player_a || !player_b || !out_game_id)
+        return -1;
+    if (s->games_count >= SERVER_MAX_GAMES)
+        return -1;
+
+    /* If caller provided a non-zero gid in *out_game_id, use it; otherwise
+     * allocate a fresh id from s->next_game_id. This prevents double
+     * increment when caller (e.g. server_accept_challenge) already reserved
+     * an id.
+     */
+    uint64_t gid = 0;
+    if (out_game_id && *out_game_id != 0) {
+        gid = *out_game_id;
+    } else {
+        gid = s->next_game_id++;
+    }
+
+    game_t *g = &s->games[s->games_count]; /* get the next free game slot */
+    game_init(g, player_a, player_b);    /* initialize the game structure */
+    g->id = gid;                         /* assign game id */
+    s->games_count++;                    /* increment active games count */
+    *out_game_id = g->id;                /* return game id to caller */
+    printf("Created game id=%lu between %s and %s\n", g->id, player_a, player_b);
+    return 0;
+}
+int server_get_game(server_state_t *s, uint64_t game_id, game_t **out)
+{
+    if (!s || !out)
+        return -1;
+    for (int i = 0; i < s->games_count; ++i)
+    {
+        if (s->games[i].id == game_id)
+        {
+            *out = &s->games[i];
+            return 0;
+        }
+    }
+    return -1;
+}
+
 
 /* Handle a single client socket that has readable data. */
 static void server_handle_client_data(client_t *c, client_t *clients, server_state_t *state)
@@ -460,21 +523,36 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
             {
                 char *acceptor = strtok(args, " ");
                 char *challenger = strtok(NULL, " ");
+                uint64_t gid = 0;
+                int P1 = 0;
+                int P2 = 0;
                 if (acceptor && challenger)
                 {
-                    uint64_t gid = 0;
+                    
                     int rv = server_accept_challenge(state, challenger, acceptor, &gid);
                     if (rv == 0)
                     {
                         int notified = 0;
+                        
                         for (int j = 0; j < MAX_CLIENTS; ++j)
                         {
+                            
+                            if (strcmp(clients[j].name, acceptor) == 0){
+                                P1 = clients[j].fd;
+                            }
+                        }
+                        for (int j = 0; j < MAX_CLIENTS; ++j)
+                        {
+                            
                             if (clients[j].fd != -1 && strcmp(clients[j].name, challenger) == 0)
                             {
+                                P2 = clients[j].fd;
                                 char out[PROTO_MAX_LINE];
-                                snprintf(out, sizeof(out), "ACCEPTED %s %s %lu\n", acceptor, challenger, gid);
-                                send(clients[j].fd, out, strlen(out), 0);
+                                snprintf(out, sizeof(out), "ACCEPTED, THE GAME WILL START SOON %s %s %lu\n", acceptor, challenger, gid);
+                                send(P2, out, strlen(out), 0);// notify challenger
+                                send(P1, out, strlen(out), 0);// notify acceptor
                                 notified = 1;
+                                server_create_game_from_challenge(state, challenger, acceptor, &gid);
                                 break;
                             }
                         }
@@ -494,6 +572,35 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                         snprintf(resp, sizeof(resp), "ERROR No active challenge from %s to %s\n", challenger, acceptor);
                         send(c->fd, resp, strlen(resp), 0);
                     }
+                    game_t *game = NULL;
+                    char resp [PROTO_MAX_LINE];
+
+                    if (server_get_game(state, gid, &game) == 0) {
+                        
+                        while(!game_is_over(game)) {
+                            // render the board into resp using the buffer-based game_print
+                            int nw = game_print(game, resp, sizeof(resp));
+                            if (nw < 0) {
+                                /* rendering failed: send an error line to players and break */
+                                snprintf(resp, sizeof(resp), "ERROR cannot render game %lu\n", gid);
+                                send_all(P1, resp, strlen(resp));
+                                send_all(P2, resp, strlen(resp));
+                                break;
+                            }
+                            /* ensure we send the full buffer (nw bytes) over TCP */
+                            send_all(P1, resp, (size_t)nw);
+                            send_all(P2, resp, (size_t)nw);
+                            /* For demonstration break after one broadcast */
+                            break;
+                        }
+                    } else {
+                        /* Handle error: game not found */
+                        char errbuf[PROTO_MAX_LINE];
+                        snprintf(errbuf, sizeof(errbuf), "ERROR game %lu not found\n", gid);
+                        if (P1) send_all(P1, errbuf, strlen(errbuf));
+                        if (P2) send_all(P2, errbuf, strlen(errbuf));
+                    }
+
                 }
             }
         }
