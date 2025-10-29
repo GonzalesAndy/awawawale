@@ -10,7 +10,6 @@ static void safe_send(int fd, const char *s)
     send(fd, s, strlen(s), 0);
 }
 
-// Very light parser: splits command and provides args pointer
 static const char *parse_cmd(char *line, char **args)
 {
     size_t L = strlen(line);
@@ -21,7 +20,6 @@ static const char *parse_cmd(char *line, char **args)
     return line;
 }
 
-// Individual handlers forward to server_state API
 static int handle_register(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
@@ -224,6 +222,111 @@ static int handle_refuse(server_state_t *state, client_t *self, client_t *client
     return -1;
 }
 
+static int find_client_by_name(client_t *clients, const char *name)
+{ if (!clients||!name) return -1; for (int i=0;i<SERVER_NET_MAX_CLIENTS;++i) if (clients[i].fd!=-1 && strcmp(clients[i].name,name)==0) return i; return -1; }
+
+static int handle_chat(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)state;
+    if (!args) return -1;
+    char *from = strtok(args, " ");
+    char *target = strtok(NULL, " ");
+    char *msg = strtok(NULL, "");
+    if (!from || !msg) return -1;
+    if (!target || target[0] == '\0')
+    {
+        char out[PROTO_MAX_LINE]; 
+        snprintf(out, sizeof(out), "CHAT %s %s\n", from, msg);
+        for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
+            if (clients[i].fd != -1) safe_send(clients[i].fd, out);
+        return 0;
+    }
+    int gi = -1;
+    for (int i = 0; i < SERVER_MAX_GROUPS; ++i)
+        if (state->groups[i].active && strcmp(state->groups[i].name, target) == 0)
+        {
+            gi = i;
+            break;
+        }
+    char out[PROTO_MAX_LINE];
+    if (gi >= 0)
+    {
+        if (!server_group_is_member(state, state->groups[gi].name, from))
+        { safe_send(self->fd, "ERROR not a member of group\n"); return -1; }
+        for (int m = 0; m < state->groups[gi].member_count; ++m)
+        {
+            int idx = find_client_by_name(clients, state->groups[gi].members[m]);
+            if (idx >= 0)
+            {
+                snprintf(out, sizeof(out), "CHAT %s@%s %s\n", from, target, msg);
+                safe_send(clients[idx].fd, out);
+            }
+        }
+        return 0;
+    }
+    // Private chat
+    int idx = find_client_by_name(clients, target);
+    if (idx < 0) { safe_send(self->fd, "ERROR target not online\n"); return -1; }
+    snprintf(out, sizeof(out), "CHAT %s->%s %s\n", from, target, msg);
+    safe_send(clients[idx].fd, out);
+    return 0;
+}
+
+static int handle_group_create(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!args) return -1;
+    char *owner = strtok(args, " ");
+    char *gname = strtok(NULL, " \n");
+    if (!owner || !gname) return -1;
+    if (server_group_create(state, owner, gname) == 0)
+    {
+        char out[PROTO_MAX_LINE];
+        snprintf(out, sizeof(out), "GROUP_CREATED %s\n", gname);
+        safe_send(self->fd, out);
+        return 0;
+    }
+    safe_send(self->fd, "ERROR cannot create group\n");
+    return -1;
+}
+
+static int handle_group_invite(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!args) return -1;
+    char *owner = strtok(args, " ");
+    char *gname = strtok(NULL, " "); 
+    char *user = strtok(NULL, " \n");
+    if (!owner || !gname || !user) return -1;
+    if (server_group_invite(state, owner, gname, user) == 0)
+    {
+        char out[PROTO_MAX_LINE];
+        snprintf(out, sizeof(out), "GROUP_INVITED %s %s\n", gname, user);
+        safe_send(self->fd, out);
+        return 0;
+    }
+    safe_send(self->fd, "ERROR cannot invite\n");
+    return -1;
+}
+
+static int handle_group_quit(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!args) return -1;
+    char *gname = strtok(args, " ");
+    char *user = strtok(NULL, " \n");
+    if (!gname || !user) return -1;
+    if (server_group_quit(state, gname, user) == 0)
+    {
+        char out[PROTO_MAX_LINE];
+        snprintf(out, sizeof(out), "GROUP_QUIT %s %s\n", gname, user);
+        safe_send(self->fd, out);
+        return 0;
+    }
+    safe_send(self->fd, "ERROR cannot quit group\n");
+    return -1;
+}
+
 // Dispatcher
 int server_dispatch_command(server_state_t *state, client_t *self, client_t *clients, const char *line_in)
 {
@@ -240,6 +343,10 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     if (strcmp(cmd, CMD_CHALLENGE) == 0) return handle_challenge(state, self, clients, args);
     if (strcmp(cmd, CMD_ACCEPT) == 0) return handle_accept(state, self, clients, args);
     if (strcmp(cmd, CMD_REFUSE) == 0) return handle_refuse(state, self, clients, args);
+    if (strcmp(cmd, CMD_CHAT) == 0) return handle_chat(state, self, clients, args);
+    if (strcmp(cmd, CMD_GROUP_CREATE) == 0) return handle_group_create(state, self, clients, args);
+    if (strcmp(cmd, CMD_GROUP_INVITE) == 0) return handle_group_invite(state, self, clients, args);
+    if (strcmp(cmd, CMD_GROUP_QUIT) == 0) return handle_group_quit(state, self, clients, args);
 
     char resp[PROTO_MAX_LINE];
     snprintf(resp, sizeof(resp), "ECHO %s\n", line_in);

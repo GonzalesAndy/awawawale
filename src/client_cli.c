@@ -18,6 +18,10 @@ void client_cli_print_help(void)
     printf("  challenge <user>      - challenge a user\n");
     printf("  accept <user>         - accept a challenge\n");
     printf("  refuse <user>         - refuse a challenge\n");
+    printf("  chat <user|group> <message>\n");
+    printf("  group_create <name>   - create a group chat you own\n");
+    printf("  group_invite <name> <user> - invite user to your group\n");
+    printf("  group_quit <name>     - quit a group chat\n");
     printf("  help                  - show this help\n");
     printf("  quit                  - exit\n\n\n");
 }
@@ -162,6 +166,34 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
         }
         proto_build_refuse(out, PROTO_MAX_LINE, username, user);
         return true;
+    }
+    else if (strcmp(cmd, "chat") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *target = strtok(NULL, " ");
+        char *msg = strtok(NULL, "");
+        if (!msg) { printf("Usage: chat <user|group> <message>\n"); return false; }
+        proto_build_chat(out, PROTO_MAX_LINE, username, target?target:"", msg);
+        return true;
+    }
+    else if (strcmp(cmd, "group_create") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *gname = strtok(NULL, " "); if (!gname) { printf("Usage: group_create <name>\n"); return false; }
+        proto_build_group_create(out, PROTO_MAX_LINE, username, gname); return true;
+    }
+    else if (strcmp(cmd, "group_invite") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *gname = strtok(NULL, " "); char *user = strtok(NULL, " \n");
+        if (!gname || !user) { printf("Usage: group_invite <name> <user>\n"); return false; }
+        proto_build_group_invite(out, PROTO_MAX_LINE, username, gname, user); return true;
+    }
+    else if (strcmp(cmd, "group_quit") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *gname = strtok(NULL, " \n"); if (!gname) { printf("Usage: group_quit <name>\n"); return false; }
+        proto_build_group_quit(out, PROTO_MAX_LINE, gname, username); return true;
     }
 
     printf("Unknown command '%s'\n", cmd);

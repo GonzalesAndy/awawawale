@@ -42,6 +42,24 @@ char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, c
     return dest;
 }
 
+char *proto_build_group_create(char *dest, size_t n, const char *owner, const char *group_name) {
+    if (!dest || !owner || !group_name) return NULL;
+    snprintf(dest, n, "%s %s %s\n", CMD_GROUP_CREATE, owner, group_name);
+    return dest;
+}
+
+char *proto_build_group_invite(char *dest, size_t n, const char *owner, const char *group_name, const char *username) {
+    if (!dest || !owner || !group_name || !username) return NULL;
+    snprintf(dest, n, "%s %s %s %s\n", CMD_GROUP_INVITE, owner, group_name, username);
+    return dest;
+}
+
+char *proto_build_group_quit(char *dest, size_t n, const char *group_name, const char *username) {
+    if (!dest || !group_name || !username) return NULL;
+    snprintf(dest, n, "%s %s %s\n", CMD_GROUP_QUIT, group_name, username);
+    return dest;
+}
+
 char *proto_build_register(char *dest, size_t n, const char *name) {
     if (!dest || !name) return NULL;
     snprintf(dest, n, "%s %s\n", CMD_REGISTER, name);

@@ -10,6 +10,9 @@
 #define SERVER_MAX_USERS 128
 #define SERVER_MAX_GAMES 64
 #define SERVER_MAX_PENDING_CHALLENGES 64
+// Groups
+#define SERVER_MAX_GROUPS 64
+#define SERVER_MAX_GROUP_MEMBERS 32
 
 // Challenge record for pending invitations
 typedef struct {
@@ -17,6 +20,15 @@ typedef struct {
 	char to[GAME_MAX_USERNAME];
 	bool active;
 } challenge_t;
+
+// Group chat record
+typedef struct {
+	char name[GAME_MAX_USERNAME];
+	char owner[GAME_MAX_USERNAME];
+	char members[SERVER_MAX_GROUP_MEMBERS][GAME_MAX_USERNAME];
+	int member_count;
+	bool active;
+} group_t;
 
 // Server's main runtime state (in-memory). The server will maintain
 // registries of users, active games, challenges, and chat logs. This is
@@ -30,6 +42,10 @@ typedef struct {
 
 	challenge_t challenges[SERVER_MAX_PENDING_CHALLENGES];
 	int challenges_count;
+
+	// Group chats
+	group_t groups[SERVER_MAX_GROUPS];
+	int groups_count;
 
 	// Simple next ids generator for games
 	uint64_t next_game_id;
@@ -60,6 +76,12 @@ int server_send_private_message(server_state_t *s, const client_message_t *m);
 
 // Persistence
 int server_persist_game_record(server_state_t *s, const game_t *g, const char *path);
+
+// Groups management
+int server_group_create(server_state_t *s, const char *owner, const char *group_name);
+int server_group_invite(server_state_t *s, const char *owner, const char *group_name, const char *username);
+int server_group_quit(server_state_t *s, const char *group_name, const char *username);
+int server_group_is_member(server_state_t *s, const char *group_name, const char *username);
 
 #endif // SERVER_H
 

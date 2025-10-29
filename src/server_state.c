@@ -18,6 +18,8 @@ int server_init(server_state_t *s)
     s->challenges_count = 0;
     for (int i = 0; i < SERVER_MAX_PENDING_CHALLENGES; ++i)
         s->challenges[i].active = false;
+    s->groups_count = 0;
+    for (int i = 0; i < SERVER_MAX_GROUPS; ++i) s->groups[i].active = false;
     s->next_game_id = 1;
     return 0;
 }
@@ -216,6 +218,74 @@ int server_remove_game(server_state_t *s, uint64_t game_id)
             // compact by swapping last
             s->games[i] = s->games[s->games_count - 1];
             s->games_count--;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int find_group(server_state_t *s, const char *name)
+{ if (!s||!name) return -1; for (int i=0;i<SERVER_MAX_GROUPS;++i) if (s->groups[i].active && strcmp(s->groups[i].name,name)==0) return i; return -1; }
+
+int server_group_create(server_state_t *s, const char *owner, const char *group_name)
+{
+    if (!s || !owner || !group_name) return -1;
+    if (find_group(s, group_name) >= 0) return -1;
+    for (int i = 0; i < SERVER_MAX_GROUPS; ++i)
+    {
+        if (!s->groups[i].active)
+        {
+            s->groups[i].active = true;
+            strncpy(s->groups[i].name, group_name, GAME_MAX_USERNAME-1);
+            s->groups[i].name[GAME_MAX_USERNAME-1] = '\0';
+            strncpy(s->groups[i].owner, owner, GAME_MAX_USERNAME-1);
+            s->groups[i].owner[GAME_MAX_USERNAME-1] = '\0';
+            s->groups[i].member_count = 0;
+            strncpy(s->groups[i].members[s->groups[i].member_count++], owner, GAME_MAX_USERNAME-1);
+            s->groups_count++;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int server_group_is_member(server_state_t *s, const char *group_name, const char *username)
+{
+    int gi = find_group(s, group_name); if (gi < 0) return 0;
+    for (int i = 0; i < s->groups[gi].member_count; ++i)
+        if (strcmp(s->groups[gi].members[i], username) == 0) return 1;
+    return 0;
+}
+
+int server_group_invite(server_state_t *s, const char *owner, const char *group_name, const char *username)
+{
+    int gi = find_group(s, group_name); if (gi < 0) return -1;
+    if (strcmp(s->groups[gi].owner, owner) != 0) return -1;
+    if (s->groups[gi].member_count >= SERVER_MAX_GROUP_MEMBERS) return -1;
+    if (server_group_is_member(s, group_name, username)) return 0;
+    strncpy(s->groups[gi].members[s->groups[gi].member_count++], username, GAME_MAX_USERNAME-1);
+    return 0;
+}
+
+int server_group_quit(server_state_t *s, const char *group_name, const char *username)
+{
+    int gi = find_group(s, group_name); if (gi < 0) return -1;
+    for (int i = 0; i < s->groups[gi].member_count; ++i)
+    {
+        if (strcmp(s->groups[gi].members[i], username) == 0)
+        {
+            s->groups[gi].members[i][0] = '\0';
+            // compact
+            for (int j = i; j < s->groups[gi].member_count - 1; ++j)
+                strncpy(s->groups[gi].members[j], s->groups[gi].members[j+1], GAME_MAX_USERNAME);
+            s->groups[gi].member_count--;
+            // if owner leaves or last member, deactivate group
+            if (s->groups[gi].member_count == 0 || strcmp(username, s->groups[gi].owner) == 0)
+            {
+                s->groups[gi].active = false;
+                if (s->groups_count > 0)
+                    s->groups_count--;
+            }
             return 0;
         }
     }

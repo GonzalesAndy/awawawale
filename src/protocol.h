@@ -9,6 +9,9 @@
 #define CMD_REFUSE "REFUSE"
 #define CMD_MOVE "MOVE"
 #define CMD_CHAT "CHAT"
+#define CMD_GROUP_CREATE "GROUP_CREATE"
+#define CMD_GROUP_INVITE "GROUP_INVITE"
+#define CMD_GROUP_QUIT "GROUP_QUIT"
 #define CMD_REGISTER "REGISTER"
 #define CMD_USERS "USERS"
 #define CMD_GAME_UPDATE "GAME_UPDATE"
@@ -33,6 +36,9 @@ char *proto_build_accept(char *dest, size_t n, const char *from, const char *to)
 char *proto_build_refuse(char *dest, size_t n, const char *from, const char *to);
 char *proto_build_move(char *dest, size_t n, const char *from, uint64_t game_id, int pit_index);
 char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, const char *msg);
+char *proto_build_group_create(char *dest, size_t n, const char *owner, const char *group_name);
+char *proto_build_group_invite(char *dest, size_t n, const char *owner, const char *group_name, const char *username);
+char *proto_build_group_quit(char *dest, size_t n, const char *group_name, const char *username);
 char *proto_build_register(char *dest, size_t n, const char *name);
 char *proto_build_game_update(char *dest, size_t n, uint64_t game_id, const char *board_text);
 char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_id);
