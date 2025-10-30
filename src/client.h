@@ -8,6 +8,8 @@
 // Maximums for client-side buffers
 #define CLIENT_MAX_MSG 1024
 #define CLIENT_MAX_BIO 10 * 80 + 10
+#define CLIENT_MAX_GAMES 16
+#define CLIENT_MAX_PENDING_CHALLENGES 32
 
 // Representation of a connected/registered user profile kept by the
 // server and shared with clients when needed. This struct only contains
@@ -37,6 +39,22 @@ typedef struct {
 	char text[CLIENT_MAX_MSG];
 } client_message_t;
 
+typedef struct {
+	char from[GAME_MAX_USERNAME];
+	char to[GAME_MAX_USERNAME];
+	bool active;
+} challenge_clt_t;
+
+typedef struct {
+
+	game_t games[CLIENT_MAX_GAMES];
+	int games_count;
+
+	challenge_clt_t challenges[CLIENT_MAX_PENDING_CHALLENGES];
+	int challenges_count;
+
+} client_state_t;
+
 // Minimal client API prototypes (implementations elsewhere)
 int client_send_register(int sockfd, const char *username);
 int client_send_challenge(int sockfd, const char *from, const char *to);
@@ -44,5 +62,11 @@ int client_send_move(int sockfd, uint64_t game_id, int pit_index);
 int client_send_chat(int sockfd, const char *from, const char *to, const char *msg);
 int client_send_bio_set(int sockfd, const char *from, const char *bio_text);
 int client_send_bio_show(int sockfd, const char *requester, const char *target_username);
+uint64_t client_get_next_game_id(client_state_t *cs, uint64_t user_id);
+uint64_t client_get_first_game_id(client_state_t *cs);
+game_t* client_get_game_by_id(client_state_t *cs, uint64_t game_id);
+
+
+
 
 #endif // CLIENT_H

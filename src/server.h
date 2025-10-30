@@ -18,6 +18,7 @@ typedef struct {
 	bool active;
 } challenge_t;
 
+
 // Server's main runtime state (in-memory). The server will maintain
 // registries of users, active games, challenges, and chat logs. This is
 // the central structure modified by server implementation code.

@@ -113,6 +113,40 @@ int client_send_bio_show(int sockfd, const char *requester, const char *target_u
     return (int)send(sockfd, out, strlen(out), 0);
 }
 
+
+uint64_t client_get_next_game_id(client_state_t *cs, uint64_t user_id)
+{
+    (void)user_id; // unused for now
+    uint64_t max_id = 0;
+    for (int i = 0; i < cs->games_count; ++i)
+    {
+        if (cs->games[i].id > max_id)
+            max_id = cs->games[i].id;
+    }
+    return max_id + 1;
+}
+uint64_t client_get_first_game_id(client_state_t *cs){
+    if (!cs || cs->games_count == 0) return 0;
+    /* Return the first game id whose state indicates an ongoing/playing
+     * game. If none found return 0. This walks only the active entries
+     * up to cs->games_count for efficiency and correctness. */
+    for (int i = 0; i < cs->games_count; ++i) {
+        if (cs->games[i].id != 0 && cs->games[i].state == GAME_STATE_ONGOING) {
+            return cs->games[i].id;
+        }
+    }
+    return 0;
+}
+game_t* client_get_game_by_id(client_state_t *cs, uint64_t game_id)
+{
+    for (int i = 0; i < cs->games_count; ++i)
+    {
+        if (cs->games[i].id == game_id)
+            return &cs->games[i];
+    }
+    return NULL;
+}
+
 /* Process a single incoming line from the user and write protocol output
  * into `out`. If a connect command is issued, *sockfd may be updated.
  * Returns true if `out` should be sent to server. */
@@ -257,12 +291,35 @@ static bool client_handle_input(const char *username, const char *line_in, char 
         proto_build_refuse(out, PROTO_MAX_LINE, username, user);
         return true;
     }
+    else if (strcmp(cmd, "move") == 0)
+    {
+      //TODO implement the manner to make a moove
+      
+    }
+    else if (strcmp(cmd, "chat") == 0)
+    {
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *msg = strtok(NULL, "");
+        if (!msg)
+        {
+            printf("Usage: chat <message>\n");
+            return false;
+        }
+        proto_build_chat(out, PROTO_MAX_LINE, username, "", msg); // broadcast chat
+        return true;
+    }
     else
     {
         printf("Unknown command '%s'\n", cmd);
         return false;
     }
+    return false;
 }
+
 
 /* Run the client loop. Returns when quitting. */
 int client_run(void)
@@ -270,6 +327,9 @@ int client_run(void)
     char username[64] = "";
     int sockfd = -1;
     char line[PROTO_MAX_LINE];
+    /* local client-side games list */
+    game_t client_games[16];
+    int client_games_count = 0;
 
     printf("Awalé CLI client. Type 'help' for commands.\n");
     print_help();
@@ -281,6 +341,7 @@ int client_run(void)
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(STDIN_FILENO, &readfds);
+        uint64_t current_game_id = client_get_first_game_id(NULL);
         int maxfd = STDIN_FILENO;
 
         if (sockfd != -1)
@@ -305,12 +366,48 @@ int client_run(void)
             if (r > 0)
             {
                 in[r] = '\0';
+                /* If server notifies that a challenge was accepted, create a
+                 * local game record for it. Expected format (server):
+                 * "ACCEPTED, THE GAME WILL START SOON <acceptor> <challenger> <gid>\n"
+                 */
+                if (strstr(in, "ACCEPTED")) {
+                    char a[GAME_MAX_USERNAME];
+                    char b[GAME_MAX_USERNAME];
+                    unsigned long gid = 0;
+                    int sc = sscanf(in, "ACCEPTED, THE GAME WILL START SOON %31s %31s %lu", a, b, &gid);
+                    if (sc == 3) {
+                        int found = 0;
+                        for (int i = 0; i < client_games_count; ++i) {
+                            if (client_games[i].id == (uint64_t)gid) { found = 1; break; }
+                        }
+                        if (!found && client_games_count < (int)(sizeof(client_games)/sizeof(client_games[0]))) {
+                            game_init(&client_games[client_games_count], a, b);
+                            client_games[client_games_count].id = (uint64_t)gid;
+                            current_game_id = (uint64_t)gid;
+                            //DEBUG
+                            printf("current_game_id set to %lu\n", current_game_id);
+                            //DEBUG
+                            client_games_count++;
+                            printf("\r\x1b[2K");
+                            printf("%sServer:%s ACCEPTED -> created local game %lu (%s vs %s)\n", "\x1b[35m", "\x1b[0m", gid, a, b);
+                            
+                        }
+                    }
+                }
+
+                in[r] = '\0';
                 /* Clear current prompt line so we don't leave an empty prompt
                  * above the server message; then print the server message and
                  * reprint the prompt. */
                 printf("\r\x1b[2K"); /* carriage return + clear line */
                 printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", in);
                 print_prompt(username);
+                //si on est dans une pertie on met le nom de partie en jaune apres le nom d'utilisateur
+                if (current_game_id != 0) {
+                    printf("\x1b[33m[Game %lu]\x1b[0m ", current_game_id);
+                }
+
+                
             }
             else if (r == 0)
             {

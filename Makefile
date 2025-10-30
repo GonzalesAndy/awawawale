@@ -53,7 +53,7 @@ $(BINDIR)/game_playthrough: $(OBJDIR)/game.o $(OBJDIR)/persist.o $(OBJDIR)/game_
 $(BINDIR)/server: $(OBJDIR)/server.o $(OBJDIR)/protocol.o $(OBJDIR)/game.o $(OBJDIR)/persist.o
 	$(CC) $^ -o $@
 
-$(BINDIR)/client: $(OBJDIR)/client.o $(OBJDIR)/protocol.o
+$(BINDIR)/client: $(OBJDIR)/client.o $(OBJDIR)/protocol.o $(OBJDIR)/game.o $(OBJDIR)/persist.o
 	$(CC) $^ -o $@
 
 clean:

@@ -590,8 +590,25 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                             /* ensure we send the full buffer (nw bytes) over TCP */
                             send_all(P1, resp, (size_t)nw);
                             send_all(P2, resp, (size_t)nw);
-                            /* For demonstration break after one broadcast */
-                            break;
+                            //I need to wait for this imput from one of the players
+                            char cmd[PROTO_MAX_LINE];
+                            char args[PROTO_MAX_LINE];
+                            if (recv(P1, cmd, sizeof(cmd), 0) > 0 && recv(P1, args, sizeof(args), 0) > 0) {
+                                if (strcmp(cmd, CMD_MOVE) == 0) {
+                                    game_move_t move;
+                                    move.player = (game->turn == PLAYER_A) ? PLAYER_A : PLAYER_B;
+
+                                move.pit_index = atoi(args); // assuming args contains the pit index
+                                game_make_move(game, move.player, move.pit_index);    
+                            }
+
+                        }
+                    }
+                        // After game is over, send final state
+                        int nw = game_print(game, resp, sizeof(resp));
+                        if (nw >= 0) {
+                            send_all(P1, resp, (size_t)nw);
+                            send_all(P2, resp, (size_t)nw);
                         }
                     } else {
                         /* Handle error: game not found */
