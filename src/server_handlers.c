@@ -6,31 +6,43 @@
 
 static void safe_send(int fd, const char *s)
 {
-    if (fd < 0 || !s) return;
+    if (fd < 0 || !s)
+        return;
     send(fd, s, strlen(s), 0);
 }
 
 static const char *parse_cmd(char *line, char **args)
 {
     size_t L = strlen(line);
-    if (L && (line[L-1] == '\n' || line[L-1] == '\r')) line[--L] = '\0';
+    if (L && (line[L - 1] == '\n' || line[L - 1] == '\r'))
+        line[--L] = '\0';
     char *sp = strchr(line, ' ');
-    if (sp) { *sp = '\0'; *args = sp + 1; }
-    else { *args = NULL; }
+    if (sp)
+    {
+        *sp = '\0';
+        *args = sp + 1;
+    }
+    else
+    {
+        *args = NULL;
+    }
     return line;
 }
 
 static int handle_register(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char uname[GAME_MAX_USERNAME];
-    strncpy(uname, args, sizeof(uname)-1); uname[sizeof(uname)-1] = '\0';
+    strncpy(uname, args, sizeof(uname) - 1);
+    uname[sizeof(uname) - 1] = '\0';
     if (self->name[0] != '\0' && strcmp(self->name, uname) != 0)
         server_unregister_user(state, self->name);
     if (server_register_user(state, uname, self->fd) == 0)
     {
-        strncpy(self->name, uname, sizeof(self->name)-1); self->name[sizeof(self->name)-1] = '\0';
+        strncpy(self->name, uname, sizeof(self->name) - 1);
+        self->name[sizeof(self->name) - 1] = '\0';
         char resp[PROTO_MAX_LINE];
         snprintf(resp, sizeof(resp), "REGISTERED %s\n", self->name);
         safe_send(self->fd, resp);
@@ -44,8 +56,10 @@ static int handle_register(server_state_t *state, client_t *self, client_t *clie
 
 static int handle_bio(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self; (void)clients;
-    if (!args) return -1;
+    (void)self;
+    (void)clients;
+    if (!args)
+        return -1;
     char *username = strtok(args, " ");
     char *bio_text = strtok(NULL, "");
     if (username && bio_text)
@@ -67,10 +81,12 @@ static int handle_bio(server_state_t *state, client_t *self, client_t *clients, 
 static int handle_bio_show(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *requester = strtok(args, " ");
     char *target = requester ? strtok(NULL, " \n") : NULL;
-    if (!target) return -1;
+    if (!target)
+        return -1;
     char biobuf[CLIENT_MAX_BIO];
     if (server_show_user_bio(state, requester, target, biobuf, sizeof(biobuf)) == 0)
     {
@@ -87,7 +103,8 @@ static int handle_bio_show(server_state_t *state, client_t *self, client_t *clie
 
 static int handle_list_users(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)args; (void)clients;
+    (void)args;
+    (void)clients;
     char out[PROTO_MAX_LINE];
     out[0] = '\0';
     strncat(out, CMD_USERS, sizeof(out) - strlen(out) - 1);
@@ -106,10 +123,12 @@ static int handle_list_users(server_state_t *state, client_t *self, client_t *cl
 static int handle_challenge(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)self;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *from = strtok(args, " ");
     char *to = strtok(NULL, " ");
-    if (!from || !to) return -1;
+    if (!from || !to)
+        return -1;
     if (strcmp(from, to) == 0)
     {
         safe_send(self->fd, "ERROR cannot challenge yourself\n");
@@ -146,10 +165,12 @@ static int handle_challenge(server_state_t *state, client_t *self, client_t *cli
 static int handle_accept(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)self;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *acceptor = strtok(args, " ");
     char *challenger = strtok(NULL, " ");
-    if (!acceptor || !challenger) return -1;
+    if (!acceptor || !challenger)
+        return -1;
     uint64_t gid = 0;
     int rv = server_accept_challenge(state, challenger, acceptor, &gid);
     if (rv == 0)
@@ -186,10 +207,12 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
 static int handle_refuse(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)self;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *refuser = strtok(args, " ");
     char *challenger = strtok(NULL, " ");
-    if (!refuser || !challenger) return -1;
+    if (!refuser || !challenger)
+        return -1;
     int rv = server_refuse_challenge(state, challenger, refuser);
     if (rv == 0)
     {
@@ -223,22 +246,32 @@ static int handle_refuse(server_state_t *state, client_t *self, client_t *client
 }
 
 static int find_client_by_name(client_t *clients, const char *name)
-{ if (!clients||!name) return -1; for (int i=0;i<SERVER_NET_MAX_CLIENTS;++i) if (clients[i].fd!=-1 && strcmp(clients[i].name,name)==0) return i; return -1; }
+{
+    if (!clients || !name)
+        return -1;
+    for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
+        if (clients[i].fd != -1 && strcmp(clients[i].name, name) == 0)
+            return i;
+    return -1;
+}
 
 static int handle_chat(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)state;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *from = strtok(args, " ");
     char *target = strtok(NULL, " ");
     char *msg = strtok(NULL, "");
-    if (!from || !msg) return -1;
+    if (!from || !msg)
+        return -1;
     if (!target || target[0] == '\0')
     {
-        char out[PROTO_MAX_LINE]; 
+        char out[PROTO_MAX_LINE];
         snprintf(out, sizeof(out), "CHAT %s %s\n", from, msg);
         for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
-            if (clients[i].fd != -1) safe_send(clients[i].fd, out);
+            if (clients[i].fd != -1)
+                safe_send(clients[i].fd, out);
         return 0;
     }
     int gi = -1;
@@ -252,7 +285,10 @@ static int handle_chat(server_state_t *state, client_t *self, client_t *clients,
     if (gi >= 0)
     {
         if (!server_group_is_member(state, state->groups[gi].name, from))
-        { safe_send(self->fd, "ERROR not a member of group\n"); return -1; }
+        {
+            safe_send(self->fd, "ERROR not a member of group\n");
+            return -1;
+        }
         for (int m = 0; m < state->groups[gi].member_count; ++m)
         {
             int idx = find_client_by_name(clients, state->groups[gi].members[m]);
@@ -266,7 +302,11 @@ static int handle_chat(server_state_t *state, client_t *self, client_t *clients,
     }
     // Private chat
     int idx = find_client_by_name(clients, target);
-    if (idx < 0) { safe_send(self->fd, "ERROR target not online\n"); return -1; }
+    if (idx < 0)
+    {
+        safe_send(self->fd, "ERROR target not online\n");
+        return -1;
+    }
     snprintf(out, sizeof(out), "CHAT %s->%s %s\n", from, target, msg);
     safe_send(clients[idx].fd, out);
     return 0;
@@ -275,10 +315,12 @@ static int handle_chat(server_state_t *state, client_t *self, client_t *clients,
 static int handle_group_create(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *owner = strtok(args, " ");
     char *gname = strtok(NULL, " \n");
-    if (!owner || !gname) return -1;
+    if (!owner || !gname)
+        return -1;
     if (server_group_create(state, owner, gname) == 0)
     {
         char out[PROTO_MAX_LINE];
@@ -293,11 +335,13 @@ static int handle_group_create(server_state_t *state, client_t *self, client_t *
 static int handle_group_invite(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *owner = strtok(args, " ");
-    char *gname = strtok(NULL, " "); 
+    char *gname = strtok(NULL, " ");
     char *user = strtok(NULL, " \n");
-    if (!owner || !gname || !user) return -1;
+    if (!owner || !gname || !user)
+        return -1;
     if (server_group_invite(state, owner, gname, user) == 0)
     {
         char out[PROTO_MAX_LINE];
@@ -312,10 +356,12 @@ static int handle_group_invite(server_state_t *state, client_t *self, client_t *
 static int handle_group_quit(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *gname = strtok(args, " ");
     char *user = strtok(NULL, " \n");
-    if (!gname || !user) return -1;
+    if (!gname || !user)
+        return -1;
     if (server_group_quit(state, gname, user) == 0)
     {
         char out[PROTO_MAX_LINE];
@@ -330,9 +376,11 @@ static int handle_group_quit(server_state_t *state, client_t *self, client_t *cl
 // Dispatcher
 int server_dispatch_command(server_state_t *state, client_t *self, client_t *clients, const char *line_in)
 {
-    if (!state || !self || !line_in) return -1;
+    if (!state || !self || !line_in)
+        return -1;
     char line[PROTO_MAX_LINE];
-    strncpy(line, line_in, sizeof(line)-1); line[sizeof(line)-1] = '\0';
+    strncpy(line, line_in, sizeof(line) - 1);
+    line[sizeof(line) - 1] = '\0';
     char *args = NULL;
     const char *cmd = parse_cmd(line, &args);
 

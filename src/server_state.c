@@ -19,7 +19,8 @@ int server_init(server_state_t *s)
     for (int i = 0; i < SERVER_MAX_PENDING_CHALLENGES; ++i)
         s->challenges[i].active = false;
     s->groups_count = 0;
-    for (int i = 0; i < SERVER_MAX_GROUPS; ++i) s->groups[i].active = false;
+    for (int i = 0; i < SERVER_MAX_GROUPS; ++i)
+        s->groups[i].active = false;
     s->next_game_id = 1;
     return 0;
 }
@@ -28,26 +29,31 @@ int server_register_user(server_state_t *s, const char *username, int sockfd)
 {
     if (!s || !username)
         return -1;
+    int first_empty = -1;
     for (int i = 0; i < SERVER_MAX_USERS; ++i)
     {
-        if (s->users[i].username[0] != '\0' && strcmp(s->users[i].username, username) == 0)
+        if (s->users[i].username[0] != '\0')
         {
-            if (s->users[i].socket_fd != -1 && s->users[i].socket_fd != sockfd)
-                return -1;
-            s->users[i].socket_fd = sockfd;
-            return 0;
+            if (strcmp(s->users[i].username, username) == 0)
+            {
+                if (s->users[i].socket_fd != -1 && s->users[i].socket_fd != sockfd)
+                    return -1;
+                s->users[i].socket_fd = sockfd;
+                return 0;
+            }
+        }
+        else if (first_empty == -1)
+        {
+            first_empty = i;
         }
     }
-    for (int i = 0; i < SERVER_MAX_USERS; ++i)
+    if (first_empty != -1)
     {
-        if (s->users[i].username[0] == '\0')
-        {
-            strncpy(s->users[i].username, username, GAME_MAX_USERNAME - 1);
-            s->users[i].username[GAME_MAX_USERNAME - 1] = '\0';
-            s->users[i].socket_fd = sockfd;
-            s->users_count++;
-            return 0;
-        }
+        strncpy(s->users[first_empty].username, username, GAME_MAX_USERNAME - 1);
+        s->users[first_empty].username[GAME_MAX_USERNAME - 1] = '\0';
+        s->users[first_empty].socket_fd = sockfd;
+        s->users_count++;
+        return 0;
     }
     return -1;
 }
@@ -184,19 +190,23 @@ int server_refuse_challenge(server_state_t *s, const char *from, const char *to)
 // Stubs for future game management
 int server_create_game_from_challenge(server_state_t *s, const char *player_a, const char *player_b, uint64_t *out_game_id)
 {
-    if (!s || !player_a || !player_b) return -1;
-    if (s->games_count >= SERVER_MAX_GAMES) return -1;
+    if (!s || !player_a || !player_b)
+        return -1;
+    if (s->games_count >= SERVER_MAX_GAMES)
+        return -1;
     game_t *g = &s->games[s->games_count];
     game_init(g, player_a, player_b);
     g->id = s->next_game_id++;
-    if (out_game_id) *out_game_id = g->id;
+    if (out_game_id)
+        *out_game_id = g->id;
     s->games_count++;
     return 0;
 }
 
 int server_get_game(server_state_t *s, uint64_t game_id, game_t **out)
 {
-    if (!s || !out) return -1;
+    if (!s || !out)
+        return -1;
     for (int i = 0; i < s->games_count; ++i)
     {
         if (s->games[i].id == game_id)
@@ -210,7 +220,8 @@ int server_get_game(server_state_t *s, uint64_t game_id, game_t **out)
 
 int server_remove_game(server_state_t *s, uint64_t game_id)
 {
-    if (!s) return -1;
+    if (!s)
+        return -1;
     for (int i = 0; i < s->games_count; ++i)
     {
         if (s->games[i].id == game_id)
@@ -225,23 +236,32 @@ int server_remove_game(server_state_t *s, uint64_t game_id)
 }
 
 static int find_group(server_state_t *s, const char *name)
-{ if (!s||!name) return -1; for (int i=0;i<SERVER_MAX_GROUPS;++i) if (s->groups[i].active && strcmp(s->groups[i].name,name)==0) return i; return -1; }
+{
+    if (!s || !name)
+        return -1;
+    for (int i = 0; i < SERVER_MAX_GROUPS; ++i)
+        if (s->groups[i].active && strcmp(s->groups[i].name, name) == 0)
+            return i;
+    return -1;
+}
 
 int server_group_create(server_state_t *s, const char *owner, const char *group_name)
 {
-    if (!s || !owner || !group_name) return -1;
-    if (find_group(s, group_name) >= 0) return -1;
+    if (!s || !owner || !group_name)
+        return -1;
+    if (find_group(s, group_name) >= 0)
+        return -1;
     for (int i = 0; i < SERVER_MAX_GROUPS; ++i)
     {
         if (!s->groups[i].active)
         {
             s->groups[i].active = true;
-            strncpy(s->groups[i].name, group_name, GAME_MAX_USERNAME-1);
-            s->groups[i].name[GAME_MAX_USERNAME-1] = '\0';
-            strncpy(s->groups[i].owner, owner, GAME_MAX_USERNAME-1);
-            s->groups[i].owner[GAME_MAX_USERNAME-1] = '\0';
+            strncpy(s->groups[i].name, group_name, GAME_MAX_USERNAME - 1);
+            s->groups[i].name[GAME_MAX_USERNAME - 1] = '\0';
+            strncpy(s->groups[i].owner, owner, GAME_MAX_USERNAME - 1);
+            s->groups[i].owner[GAME_MAX_USERNAME - 1] = '\0';
             s->groups[i].member_count = 0;
-            strncpy(s->groups[i].members[s->groups[i].member_count++], owner, GAME_MAX_USERNAME-1);
+            strncpy(s->groups[i].members[s->groups[i].member_count++], owner, GAME_MAX_USERNAME - 1);
             s->groups_count++;
             return 0;
         }
@@ -251,25 +271,35 @@ int server_group_create(server_state_t *s, const char *owner, const char *group_
 
 int server_group_is_member(server_state_t *s, const char *group_name, const char *username)
 {
-    int gi = find_group(s, group_name); if (gi < 0) return 0;
+    int gi = find_group(s, group_name);
+    if (gi < 0)
+        return 0;
     for (int i = 0; i < s->groups[gi].member_count; ++i)
-        if (strcmp(s->groups[gi].members[i], username) == 0) return 1;
+        if (strcmp(s->groups[gi].members[i], username) == 0)
+            return 1;
     return 0;
 }
 
 int server_group_invite(server_state_t *s, const char *owner, const char *group_name, const char *username)
 {
-    int gi = find_group(s, group_name); if (gi < 0) return -1;
-    if (strcmp(s->groups[gi].owner, owner) != 0) return -1;
-    if (s->groups[gi].member_count >= SERVER_MAX_GROUP_MEMBERS) return -1;
-    if (server_group_is_member(s, group_name, username)) return 0;
-    strncpy(s->groups[gi].members[s->groups[gi].member_count++], username, GAME_MAX_USERNAME-1);
+    int gi = find_group(s, group_name);
+    if (gi < 0)
+        return -1;
+    if (strcmp(s->groups[gi].owner, owner) != 0)
+        return -1;
+    if (s->groups[gi].member_count >= SERVER_MAX_GROUP_MEMBERS)
+        return -1;
+    if (server_group_is_member(s, group_name, username))
+        return 0;
+    strncpy(s->groups[gi].members[s->groups[gi].member_count++], username, GAME_MAX_USERNAME - 1);
     return 0;
 }
 
 int server_group_quit(server_state_t *s, const char *group_name, const char *username)
 {
-    int gi = find_group(s, group_name); if (gi < 0) return -1;
+    int gi = find_group(s, group_name);
+    if (gi < 0)
+        return -1;
     for (int i = 0; i < s->groups[gi].member_count; ++i)
     {
         if (strcmp(s->groups[gi].members[i], username) == 0)
@@ -277,7 +307,7 @@ int server_group_quit(server_state_t *s, const char *group_name, const char *use
             s->groups[gi].members[i][0] = '\0';
             // compact
             for (int j = i; j < s->groups[gi].member_count - 1; ++j)
-                strncpy(s->groups[gi].members[j], s->groups[gi].members[j+1], GAME_MAX_USERNAME);
+                strncpy(s->groups[gi].members[j], s->groups[gi].members[j + 1], GAME_MAX_USERNAME);
             s->groups[gi].member_count--;
             // if owner leaves or last member, deactivate group
             if (s->groups[gi].member_count == 0 || strcmp(username, s->groups[gi].owner) == 0)

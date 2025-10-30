@@ -46,7 +46,8 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     strncpy(tmp, line_in, sizeof(tmp) - 1);
     tmp[sizeof(tmp) - 1] = '\0';
     char *cmd = strtok(tmp, " ");
-    if (!cmd) return false;
+    if (!cmd)
+        return false;
     out[0] = '\0';
 
     if (strcmp(cmd, "help") == 0)
@@ -105,7 +106,8 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     else if (strcmp(cmd, "show_bio") == 0)
     {
         char *target_username = strtok(NULL, "");
-        if (!target_username) target_username = (char *)username;
+        if (!target_username)
+            target_username = (char *)username;
         if (username[0] == '\0')
         {
             printf("You must register a username first.\n");
@@ -169,31 +171,69 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     }
     else if (strcmp(cmd, "chat") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         char *target = strtok(NULL, " ");
         char *msg = strtok(NULL, "");
-        if (!msg) { printf("Usage: chat <user|group> <message>\n"); return false; }
-        proto_build_chat(out, PROTO_MAX_LINE, username, target?target:"", msg);
+        if (!msg)
+        {
+            printf("Usage: chat <user|group> <message>\n");
+            return false;
+        }
+        proto_build_chat(out, PROTO_MAX_LINE, username, target ? target : "", msg);
         return true;
     }
     else if (strcmp(cmd, "group_create") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
-        char *gname = strtok(NULL, " "); if (!gname) { printf("Usage: group_create <name>\n"); return false; }
-        proto_build_group_create(out, PROTO_MAX_LINE, username, gname); return true;
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *gname = strtok(NULL, " ");
+        if (!gname)
+        {
+            printf("Usage: group_create <name>\n");
+            return false;
+        }
+        proto_build_group_create(out, PROTO_MAX_LINE, username, gname);
+        return true;
     }
     else if (strcmp(cmd, "group_invite") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
-        char *gname = strtok(NULL, " "); char *user = strtok(NULL, " \n");
-        if (!gname || !user) { printf("Usage: group_invite <name> <user>\n"); return false; }
-        proto_build_group_invite(out, PROTO_MAX_LINE, username, gname, user); return true;
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *gname = strtok(NULL, " ");
+        char *user = strtok(NULL, " \n");
+        if (!gname || !user)
+        {
+            printf("Usage: group_invite <name> <user>\n");
+            return false;
+        }
+        proto_build_group_invite(out, PROTO_MAX_LINE, username, gname, user);
+        return true;
     }
     else if (strcmp(cmd, "group_quit") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
-        char *gname = strtok(NULL, " \n"); if (!gname) { printf("Usage: group_quit <name>\n"); return false; }
-        proto_build_group_quit(out, PROTO_MAX_LINE, gname, username); return true;
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *gname = strtok(NULL, " \n");
+        if (!gname)
+        {
+            printf("Usage: group_quit <name>\n");
+            return false;
+        }
+        proto_build_group_quit(out, PROTO_MAX_LINE, gname, username);
+        return true;
     }
 
     printf("Unknown command '%s'\n", cmd);

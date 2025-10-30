@@ -20,9 +20,12 @@ int client_io_connect(const char *host, const char *port)
     for (struct addrinfo *rp = res; rp; rp = rp->ai_next)
     {
         sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (sockfd == -1) continue;
-        if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) == 0) break;
-        close(sockfd); sockfd = -1;
+        if (sockfd == -1)
+            continue;
+        if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) == 0)
+            break;
+        close(sockfd);
+        sockfd = -1;
     }
     freeaddrinfo(res);
     return sockfd;
