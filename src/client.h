@@ -9,6 +9,7 @@
 #define CLIENT_MAX_MSG 1024
 #define CLIENT_MAX_BIO 10 * 80 + 10
 #define CLIENT_MAX_GAMES 16
+//Delete challenge struct coté client
 #define CLIENT_MAX_PENDING_CHALLENGES 32
 
 // Representation of a connected/registered user profile kept by the
@@ -30,6 +31,8 @@ typedef struct {
 	// Client-side state: list of game ids the user participates in.
 	uint64_t active_games[16];
 	int active_games_count;
+	int focused_game_index; // index into active_games for current game
+	
 } user_profile_t;
 
 // Client-side message structure for chat and protocol exchange

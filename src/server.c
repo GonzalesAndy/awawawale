@@ -576,8 +576,6 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                     char resp [PROTO_MAX_LINE];
 
                     if (server_get_game(state, gid, &game) == 0) {
-                        
-                        while(!game_is_over(game)) {
                             // render the board into resp using the buffer-based game_print
                             int nw = game_print(game, resp, sizeof(resp));
                             if (nw < 0) {
@@ -590,27 +588,11 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                             /* ensure we send the full buffer (nw bytes) over TCP */
                             send_all(P1, resp, (size_t)nw);
                             send_all(P2, resp, (size_t)nw);
-                            //I need to wait for this imput from one of the players
-                            char cmd[PROTO_MAX_LINE];
-                            char args[PROTO_MAX_LINE];
-                            if (recv(P1, cmd, sizeof(cmd), 0) > 0 && recv(P1, args, sizeof(args), 0) > 0) {
-                                if (strcmp(cmd, CMD_MOVE) == 0) {
-                                    game_move_t move;
-                                    move.player = (game->turn == PLAYER_A) ? PLAYER_A : PLAYER_B;
-
-                                move.pit_index = atoi(args); // assuming args contains the pit index
-                                game_make_move(game, move.player, move.pit_index);    
-                            }
+                        
 
                         }
                     }
-                        // After game is over, send final state
-                        int nw = game_print(game, resp, sizeof(resp));
-                        if (nw >= 0) {
-                            send_all(P1, resp, (size_t)nw);
-                            send_all(P2, resp, (size_t)nw);
-                        }
-                    } else {
+                    else {
                         /* Handle error: game not found */
                         char errbuf[PROTO_MAX_LINE];
                         snprintf(errbuf, sizeof(errbuf), "ERROR game %lu not found\n", gid);
@@ -619,7 +601,6 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                     }
 
                 }
-            }
         }
         else if (strcmp(cmd, CMD_REFUSE) == 0)
         {
@@ -662,6 +643,19 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
                     }
                 }
             }
+        }
+        else if (strcmp(cmd, CMD_MOVE) == 0)
+        {
+            printf("Client fd=%d requested MOVE\n", c->fd);
+            // Handle the move command
+
+            char *from = strtok(args, " ");
+            char *game_id_str = strtok(NULL, " ");
+            char *pit = strtok(NULL, " ");
+            printf("Parsed from: %s\n", from);
+            printf("Parsed game_id_str: %s\n", game_id_str);
+            printf("Parsed pit: %s\n", pit);
+            
         }
         else
         {

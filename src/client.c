@@ -31,16 +31,23 @@ static void print_help(void)
 
     /* Print the interactive prompt. Uses ANSI colors when available and keeps the
      * prompt compact so it can be reprinted after asynchronous server messages. */
-    static void print_prompt(const char *username)
+    static void print_prompt(const char *username,int focused_game_index)
     {
         const char *GREEN = "\x1b[32m";
         const char *CYAN = "\x1b[36m";
         const char *RESET = "\x1b[0m";
-        if (username && username[0] != '\0')
-            printf("%sawalé%s %s%s%s> ", CYAN, RESET, GREEN, username, RESET);
+        const char *YELLOW = "\x1b[33m";
+        if (username && username[0] != '\0'){
+            if (focused_game_index > 0){
+            printf("%sawalé%s %s%s%s %s[%d]%s> ", CYAN, RESET, GREEN, username, RESET, YELLOW, focused_game_index, RESET);
+            }
+            else printf("%sawalé%s %s%s%s> ", CYAN, RESET, GREEN, username, RESET);
+        }
+       
         else
             printf("%sawalé%s > ", CYAN, RESET);
         fflush(stdout);
+        
     }
 
 /* Helper: connect to host:port returning socket fd or -1 on error */
@@ -150,7 +157,7 @@ game_t* client_get_game_by_id(client_state_t *cs, uint64_t game_id)
 /* Process a single incoming line from the user and write protocol output
  * into `out`. If a connect command is issued, *sockfd may be updated.
  * Returns true if `out` should be sent to server. */
-static bool client_handle_input(const char *username, const char *line_in, char *out, int *sockfd)
+static bool client_handle_input(const char *username, const char *line_in, char *out, int *sockfd,int focused_game_index)
 {
     char tmp[PROTO_MAX_LINE];
     strncpy(tmp, line_in, sizeof(tmp) - 1);
@@ -293,7 +300,23 @@ static bool client_handle_input(const char *username, const char *line_in, char 
     }
     else if (strcmp(cmd, "move") == 0)
     {
-      //TODO implement the manner to make a moove
+      
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *pit_str = strtok(NULL, " ");
+        if (!pit_str)
+        {
+            printf("Usage: move <pit>\n");
+            return false;
+        }
+        int pit_index = atoi(pit_str);
+        proto_build_move(out, PROTO_MAX_LINE, username, focused_game_index, pit_index); // game_id 0 for now
+        //debug
+        printf("Debug: built move command for game_id %d and pit_index %d\n", focused_game_index, pit_index);
+        return true;
       
     }
     else if (strcmp(cmd, "chat") == 0)
@@ -326,6 +349,7 @@ int client_run(void)
 {
     char username[64] = "";
     int sockfd = -1;
+    int focused_game_index = -1;
     char line[PROTO_MAX_LINE];
     /* local client-side games list */
     game_t client_games[16];
@@ -334,7 +358,7 @@ int client_run(void)
     printf("Awalé CLI client. Type 'help' for commands.\n");
     print_help();
         /* initial prompt */
-        print_prompt(username);
+        print_prompt(username, focused_game_index);
 
     while (1)
     {
@@ -383,13 +407,13 @@ int client_run(void)
                         if (!found && client_games_count < (int)(sizeof(client_games)/sizeof(client_games[0]))) {
                             game_init(&client_games[client_games_count], a, b);
                             client_games[client_games_count].id = (uint64_t)gid;
-                            current_game_id = (uint64_t)gid;
+                            focused_game_index = gid;
                             //DEBUG
                             printf("current_game_id set to %lu\n", current_game_id);
                             //DEBUG
                             client_games_count++;
                             printf("\r\x1b[2K");
-                            printf("%sServer:%s ACCEPTED -> created local game %lu (%s vs %s)\n", "\x1b[35m", "\x1b[0m", gid, a, b);
+                            printf("%sServer:%s ACCEPTED -> created local game %d (%s vs %s)\n", "\x1b[35m", "\x1b[0m", focused_game_index, a, b);
                             
                         }
                     }
@@ -401,13 +425,8 @@ int client_run(void)
                  * reprint the prompt. */
                 printf("\r\x1b[2K"); /* carriage return + clear line */
                 printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", in);
-                print_prompt(username);
-                //si on est dans une pertie on met le nom de partie en jaune apres le nom d'utilisateur
-                if (current_game_id != 0) {
-                    printf("\x1b[33m[Game %lu]\x1b[0m ", current_game_id);
-                }
-
-                
+                print_prompt(username,focused_game_index);
+   
             }
             else if (r == 0)
             {
@@ -436,12 +455,12 @@ int client_run(void)
                  * emitted a blank line; remove it and reprint the prompt so
                  * the UI stays compact. */
                 printf("\x1b[1A\x1b[2K"); /* move cursor up and clear the line */
-                print_prompt(username);
+                print_prompt(username, focused_game_index);
                 continue;
             }
 
             char out[PROTO_MAX_LINE];
-            bool send_out = client_handle_input(username, line, out, &sockfd);
+            bool send_out = client_handle_input(username, line, out, &sockfd, focused_game_index);
 
             if (send_out && out[0] != '\0' && sockfd != -1)
             {
@@ -495,7 +514,7 @@ int client_run(void)
                 /* A local command produced output (e.g. Connected / Not connected)
                  * — reprint the prompt so the user can continue typing without
                  * having to press Enter. */
-                print_prompt(username);
+                print_prompt(username, focused_game_index);
             }
         }
     }
