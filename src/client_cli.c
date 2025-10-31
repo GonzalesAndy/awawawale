@@ -74,7 +74,7 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
         // delegate to client_io via client.c main loop; here we only signal local
         return false;
     }
-    else if (strcmp(cmd, "register") == 0) // TODO : quand le user est déjà pris ça met quand même à jour le username local
+    else if (strcmp(cmd, "register") == 0)
     {
         char *name = strtok(NULL, "");
         if (!name)
