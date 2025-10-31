@@ -83,5 +83,10 @@ int server_group_invite(server_state_t *s, const char *owner, const char *group_
 int server_group_quit(server_state_t *s, const char *group_name, const char *username);
 int server_group_is_member(server_state_t *s, const char *group_name, const char *username);
 
+// Friends management
+int server_friend_add(server_state_t *s, const char *owner, const char *friend_username);
+int server_friend_remove(server_state_t *s, const char *owner, const char *friend_username);
+int server_friend_list(server_state_t *s, const char *owner, char dest[][GAME_MAX_USERNAME], int max);
+
 #endif // SERVER_H
 

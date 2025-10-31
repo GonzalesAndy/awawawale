@@ -14,6 +14,7 @@
 #define CMD_GROUP_QUIT "GROUP_QUIT"
 #define CMD_REGISTER "REGISTER"
 #define CMD_USERS "USERS"
+#define CMD_FRIENDS "FRIENDS"
 #define CMD_GAME_UPDATE "GAME_UPDATE"
 #define CMD_OBSERVE "OBSERVE"
 #define CMD_STOP_OBSERVE "STOP_OBSERVE"
@@ -22,6 +23,11 @@
 #define CMD_SET_PRIVATE "SET_PRIVATE"
 #define CMD_ALLOW_SPECTATOR "ALLOW_SPECTATOR"
 #define CMD_DISALLOW_SPECTATOR "DISALLOW_SPECTATOR"
+
+// Friend management commands
+#define CMD_FRIEND_ADD "FRIEND_ADD"
+#define CMD_FRIEND_REMOVE "FRIEND_REMOVE"
+#define CMD_LIST_FRIENDS "LIST_FRIENDS"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -48,6 +54,11 @@ char *proto_build_bio_show(char *dest, size_t n, const char *requester, const ch
 char *proto_build_set_private(char *dest, size_t n, const char *from, int private_flag);
 char *proto_build_allow_spectator(char *dest, size_t n, const char *from, const char *spectator_username);
 char *proto_build_disallow_spectator(char *dest, size_t n, const char *from, const char *spectator_username);
+
+// Friend management builders
+char *proto_build_friend_add(char *dest, size_t n, const char *owner, const char *friend_username);
+char *proto_build_friend_remove(char *dest, size_t n, const char *owner, const char *friend_username);
+char *proto_build_list_friends(char *dest, size_t n, const char *owner);
 
 // Parse a received line into command and args. Returns command pointer or NULL.
 // The function will modify the line and return pointers into it for command and arg.

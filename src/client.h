@@ -41,9 +41,5 @@ typedef struct {
 // Minimal client API prototypes (implementations elsewhere)
 int client_send_register(int sockfd, const char *username);
 int client_send_challenge(int sockfd, const char *from, const char *to);
-int client_send_move(int sockfd, uint64_t game_id, int pit_index);
-int client_send_chat(int sockfd, const char *from, const char *to, const char *msg);
-int client_send_bio_set(int sockfd, const char *from, const char *bio_text);
-int client_send_bio_show(int sockfd, const char *requester, const char *target_username);
 
 #endif // CLIENT_H

@@ -22,6 +22,9 @@ void client_cli_print_help(void)
     printf("  group_create <name>   - create a group chat you own\n");
     printf("  group_invite <name> <user> - invite user to your group\n");
     printf("  group_quit <name>     - quit a group chat\n");
+    printf("  friend_add <user>     - add a friend\n");
+    printf("  friend_remove <user>  - remove a friend\n");
+    printf("  friends               - list your friends\n");
     printf("  help                  - show this help\n");
     printf("  quit                  - exit\n\n\n");
 }
@@ -71,7 +74,7 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
         // delegate to client_io via client.c main loop; here we only signal local
         return false;
     }
-    else if (strcmp(cmd, "register") == 0)
+    else if (strcmp(cmd, "register") == 0) // TODO : quand le user est déjà pris ça met quand même à jour le username local
     {
         char *name = strtok(NULL, "");
         if (!name)
@@ -233,6 +236,53 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
             return false;
         }
         proto_build_group_quit(out, PROTO_MAX_LINE, gname, username);
+        return true;
+    }
+    else if (strcmp(cmd, "friend_add") == 0)
+    {
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *user = strtok(NULL, " \n");
+        if (!user)
+        {
+            printf("Usage: friend_add <user>\n");
+            return false;
+        }
+        if (strcmp(user, username) == 0)
+        {
+            printf("Cannot add yourself as friend.\n");
+            return false;
+        }
+        proto_build_friend_add(out, PROTO_MAX_LINE, username, user);
+        return true;
+    }
+    else if (strcmp(cmd, "friend_remove") == 0)
+    {
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        char *user = strtok(NULL, " \n");
+        if (!user)
+        {
+            printf("Usage: friend_remove <user>\n");
+            return false;
+        }
+        proto_build_friend_remove(out, PROTO_MAX_LINE, username, user);
+        return true;
+    }
+    else if (strcmp(cmd, "friends") == 0)
+    {
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        proto_build_list_friends(out, PROTO_MAX_LINE, username);
         return true;
     }
 

@@ -25,34 +25,6 @@ int client_send_challenge(int sockfd, const char *from, const char *to)
         return -1;
     return (int)send(sockfd, out, strlen(out), 0);
 }
-int client_send_move(int sockfd, uint64_t game_id, int pit_index)
-{
-    char out[PROTO_MAX_LINE];
-    if (!proto_build_move(out, sizeof(out), "", game_id, pit_index))
-        return -1;
-    return (int)send(sockfd, out, strlen(out), 0);
-}
-int client_send_chat(int sockfd, const char *from, const char *to, const char *msg)
-{
-    char out[PROTO_MAX_LINE];
-    if (!proto_build_chat(out, sizeof(out), from, to, msg))
-        return -1;
-    return (int)send(sockfd, out, strlen(out), 0);
-}
-int client_send_bio_set(int sockfd, const char *from, const char *bio_text)
-{
-    char out[PROTO_MAX_LINE];
-    if (!proto_build_bio_set(out, sizeof(out), from, bio_text))
-        return -1;
-    return (int)send(sockfd, out, strlen(out), 0);
-}
-int client_send_bio_show(int sockfd, const char *requester, const char *target_username)
-{
-    char out[PROTO_MAX_LINE];
-    if (!proto_build_bio_show(out, sizeof(out), requester, target_username))
-        return -1;
-    return (int)send(sockfd, out, strlen(out), 0);
-}
 
 static void reprint_prompt(const char *username)
 {
@@ -95,6 +67,30 @@ int client_run(void)
             if (r > 0)
             {
                 in[r] = '\0';
+                {
+                    char *p = in;
+                    while (*p)
+                    {
+                        char *line = p;
+                        char *nl = strchr(line, '\n');
+                        if (nl)
+                            *nl = '\0';
+                        if (strncmp(line, "REGISTERED ", 11) == 0)
+                        {
+                            const char *name = line + 11;
+                            while (*name == ' ')
+                                ++name;
+                            if (*name)
+                            {
+                                strncpy(username, name, sizeof(username) - 1);
+                                username[sizeof(username) - 1] = '\0';
+                            }
+                        }
+                        if (!nl)
+                            break;
+                        p = nl + 1;
+                    }
+                }
                 printf("\r\x1b[2K");
                 printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", in);
                 reprint_prompt(username);
@@ -150,47 +146,9 @@ int client_run(void)
             bool send_out = client_cli_handle_input(username, line, out, &sockfd);
             if (send_out && out[0] != '\0' && sockfd != -1)
             {
-                if (strncmp(out, CMD_REGISTER, strlen(CMD_REGISTER)) == 0)
-                {
-                    char tmp[PROTO_MAX_LINE];
-                    strncpy(tmp, out, sizeof(tmp) - 1);
-                    tmp[sizeof(tmp) - 1] = '\0';
-                    char *name = strchr(tmp, ' ');
-                    if (name)
-                    {
-                        name++;
-                        char *nl = strchr(name, '\n');
-                        if (nl)
-                            *nl = '\0';
-                        if (client_send_register(sockfd, name) < 0)
-                            perror("send");
-                        else
-                        {
-                            strncpy(username, name, sizeof(username) - 1);
-                            username[sizeof(username) - 1] = '\0';
-                        }
-                    }
-                }
-                else if (strncmp(out, CMD_CHALLENGE, strlen(CMD_CHALLENGE)) == 0)
-                {
-                    char tmp[PROTO_MAX_LINE];
-                    strncpy(tmp, out, sizeof(tmp) - 1);
-                    tmp[sizeof(tmp) - 1] = '\0';
-                    (void)strtok(tmp, " ");
-                    char *from = strtok(NULL, " ");
-                    char *to = strtok(NULL, " \n");
-                    if (from && to)
-                    {
-                        if (client_send_challenge(sockfd, from, to) < 0)
-                            perror("send");
-                    }
-                }
-                else
-                {
-                    ssize_t s = send(sockfd, out, strlen(out), 0);
-                    if (s < 0)
-                        perror("send");
-                }
+                ssize_t s = send(sockfd, out, strlen(out), 0);
+                if (s < 0)
+                    perror("send");
             }
             else
             {

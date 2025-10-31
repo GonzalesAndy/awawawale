@@ -373,6 +373,62 @@ static int handle_group_quit(server_state_t *state, client_t *self, client_t *cl
     return -1;
 }
 
+static int handle_friend_add(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!args) return -1;
+    char *owner = strtok(args, " ");
+    char *fuser = strtok(NULL, " \n");
+    if (!owner || !fuser) return -1;
+    if (server_friend_add(state, owner, fuser) == 0)
+    {
+        char out[PROTO_MAX_LINE];
+        snprintf(out, sizeof(out), "FRIEND_ADDED %s\n", fuser);
+        safe_send(self->fd, out);
+        return 0;
+    }
+    safe_send(self->fd, "ERROR cannot add friend\n");
+    return -1;
+}
+
+static int handle_friend_remove(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!args) return -1;
+    char *owner = strtok(args, " ");
+    char *fuser = strtok(NULL, " \n");
+    if (!owner || !fuser) return -1;
+    if (server_friend_remove(state, owner, fuser) == 0)
+    {
+        char out[PROTO_MAX_LINE];
+        snprintf(out, sizeof(out), "FRIEND_REMOVED %s\n", fuser);
+        safe_send(self->fd, out);
+        return 0;
+    }
+    safe_send(self->fd, "ERROR cannot remove friend\n");
+    return -1;
+}
+
+static int handle_list_friends(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!args) return -1;
+    char *owner = strtok(args, " \n");
+    if (!owner) return -1;
+    char out[PROTO_MAX_LINE]; out[0] = '\0';
+    strncat(out, CMD_FRIENDS, sizeof(out) - strlen(out) - 1);
+    char friends[CLIENT_MAX_FRIENDS][GAME_MAX_USERNAME];
+    int n = server_friend_list(state, owner, friends, CLIENT_MAX_FRIENDS);
+    for (int i = 0; i < n; ++i)
+    {
+        strncat(out, " ", sizeof(out) - strlen(out) - 1);
+        strncat(out, friends[i], sizeof(out) - strlen(out) - 1);
+    }
+    strncat(out, "\n", sizeof(out) - strlen(out) - 1);
+    safe_send(self->fd, out);
+    return 0;
+}
+
 // Dispatcher
 int server_dispatch_command(server_state_t *state, client_t *self, client_t *clients, const char *line_in)
 {
@@ -395,6 +451,9 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     if (strcmp(cmd, CMD_GROUP_CREATE) == 0) return handle_group_create(state, self, clients, args);
     if (strcmp(cmd, CMD_GROUP_INVITE) == 0) return handle_group_invite(state, self, clients, args);
     if (strcmp(cmd, CMD_GROUP_QUIT) == 0) return handle_group_quit(state, self, clients, args);
+    if (strcmp(cmd, CMD_FRIEND_ADD) == 0) return handle_friend_add(state, self, clients, args);
+    if (strcmp(cmd, CMD_FRIEND_REMOVE) == 0) return handle_friend_remove(state, self, clients, args);
+    if (strcmp(cmd, CMD_LIST_FRIENDS) == 0) return handle_list_friends(state, self, clients, args);
 
     char resp[PROTO_MAX_LINE];
     snprintf(resp, sizeof(resp), "ECHO %s\n", line_in);

@@ -83,6 +83,7 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
         else
             perror("recv");
         close(c->fd);
+        server_unregister_user(state, c->name);
         client_init(c);
         return;
     }
