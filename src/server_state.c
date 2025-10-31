@@ -49,11 +49,18 @@ int server_register_user(server_state_t *s, const char *username, int sockfd)
     }
     if (first_empty != -1)
     {
-        strncpy(s->users[first_empty].username, username, GAME_MAX_USERNAME - 1);
-        s->users[first_empty].username[GAME_MAX_USERNAME - 1] = '\0';
-        s->users[first_empty].socket_fd = sockfd;
-        s->users_count++;
-        return 0;
+           user_profile_t *u = &s->users[first_empty];
+           // Clear the entire struct, then fill required fields
+           memset(u, 0, sizeof(*u));
+           strncpy(u->username, username, GAME_MAX_USERNAME - 1);
+           u->username[GAME_MAX_USERNAME - 1] = '\0';
+           u->socket_fd = sockfd;
+           u->bio[0] = '\0';
+           u->friends_count = 0;
+           for (int j = 0; j < CLIENT_MAX_FRIENDS; ++j) u->friends[j][0] = '\0';
+           u->active_games_count = 0;
+           s->users_count++;
+           return 0;
     }
     return -1;
 }
@@ -66,8 +73,9 @@ int server_unregister_user(server_state_t *s, const char *username)
     {
         if (s->users[i].username[0] != '\0' && strcmp(s->users[i].username, username) == 0)
         {
-            s->users[i].username[0] = '\0';
-            s->users[i].socket_fd = -1;
+                // Reset entire user slot to default empty state
+                memset(&s->users[i], 0, sizeof(s->users[i]));
+                s->users[i].socket_fd = -1;
             if (s->users_count > 0)
                 s->users_count--;
             return 0;
@@ -338,6 +346,15 @@ static int find_user_index(server_state_t *s, const char *username)
         }
     }
     return -1;
+}
+
+int server_mark_user_offline(server_state_t *s, const char *username)
+{
+    if (!s || !username) return -1;
+    int idx = find_user_index(s, username);
+    if (idx < 0) return -1;
+    s->users[idx].socket_fd = -1;
+    return 0;
 }
 
 int server_friend_add(server_state_t *s, const char *owner, const char *friend_username)

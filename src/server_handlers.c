@@ -38,7 +38,7 @@ static int handle_register(server_state_t *state, client_t *self, client_t *clie
     strncpy(uname, args, sizeof(uname) - 1);
     uname[sizeof(uname) - 1] = '\0';
     if (self->name[0] != '\0' && strcmp(self->name, uname) != 0)
-        server_unregister_user(state, self->name);
+        server_mark_user_offline(state, self->name);
     if (server_register_user(state, uname, self->fd) == 0)
     {
         strncpy(self->name, uname, sizeof(self->name) - 1);

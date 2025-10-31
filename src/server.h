@@ -88,5 +88,8 @@ int server_friend_add(server_state_t *s, const char *owner, const char *friend_u
 int server_friend_remove(server_state_t *s, const char *owner, const char *friend_username);
 int server_friend_list(server_state_t *s, const char *owner, char dest[][GAME_MAX_USERNAME], int max);
 
+// Connection state
+int server_mark_user_offline(server_state_t *s, const char *username);
+
 #endif // SERVER_H
 
