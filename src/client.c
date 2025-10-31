@@ -9,22 +9,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
-
-/* Convenience wrappers matching prototypes in client.h */
-int client_send_register(int sockfd, const char *username)
-{
-    char out[PROTO_MAX_LINE];
-    if (!proto_build_register(out, sizeof(out), username))
-        return -1;
-    return (int)send(sockfd, out, strlen(out), 0);
-}
-int client_send_challenge(int sockfd, const char *from, const char *to)
-{
-    char out[PROTO_MAX_LINE];
-    if (!proto_build_challenge(out, sizeof(out), from, to))
-        return -1;
-    return (int)send(sockfd, out, strlen(out), 0);
-}
+#include <stdbool.h>
 
 static void reprint_prompt(const char *username)
 {
@@ -62,49 +47,44 @@ int client_run(void)
 
         if (sockfd != -1 && FD_ISSET(sockfd, &readfds))
         {
-            char in[PROTO_MAX_LINE];
-            ssize_t r = recv(sockfd, in, sizeof(in) - 1, 0);
-            if (r > 0)
+            char buf[PROTO_MAX_LINE];
+            ssize_t n = recv(sockfd, buf, sizeof(buf) - 1, 0);
+            if (n <= 0)
             {
-                in[r] = '\0';
-                {
-                    char *p = in;
-                    while (*p)
-                    {
-                        char *line = p;
-                        char *nl = strchr(line, '\n');
-                        if (nl)
-                            *nl = '\0';
-                        if (strncmp(line, "REGISTERED ", 11) == 0)
-                        {
-                            const char *name = line + 11;
-                            while (*name == ' ')
-                                ++name;
-                            if (*name)
-                            {
-                                strncpy(username, name, sizeof(username) - 1);
-                                username[sizeof(username) - 1] = '\0';
-                            }
-                        }
-                        if (!nl)
-                            break;
-                        p = nl + 1;
-                    }
-                }
-                printf("\r\x1b[2K");
-                printf("%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", in);
-                reprint_prompt(username);
-            }
-            else if (r == 0)
-            {
-                printf("\nServer closed connection\n");
+                if (n == 0)
+                    printf("\nServer closed connection\n");
+                else
+                    perror("recv");
                 close(sockfd);
                 sockfd = -1;
+                continue;
             }
-            else
+
+            buf[n] = '\0';
+
+            char *lineptr = strtok(buf, "\n");
+            while (lineptr)
             {
-                perror("recv");
+                while (*lineptr == ' ')
+                    ++lineptr;
+
+                if (strncmp(lineptr, "REGISTERED ", 11) == 0)
+                {
+                    const char *name = lineptr + 11;
+                    while (*name == ' ')
+                        ++name;
+                    if (*name)
+                    {
+                        strncpy(username, name, sizeof(username) - 1);
+                        username[sizeof(username) - 1] = '\0';
+                    }
+                }
+
+                printf("\r\x1b[2K%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", lineptr);
+                lineptr = strtok(NULL, "\n");
             }
+
+            reprint_prompt(username);
         }
 
         if (FD_ISSET(STDIN_FILENO, &readfds))
@@ -114,6 +94,7 @@ int client_run(void)
             size_t len = strlen(line);
             if (len && line[len - 1] == '\n')
                 line[len - 1] = '\0';
+
             if (strlen(line) == 0)
             {
                 printf("\x1b[1A\x1b[2K");
@@ -121,7 +102,6 @@ int client_run(void)
                 continue;
             }
 
-            // Inline handle connect as a local action
             if (strncmp(line, "connect ", 8) == 0)
             {
                 char host[256] = {0}, port[32] = {0};
@@ -135,7 +115,7 @@ int client_run(void)
                         if (sockfd != -1)
                             close(sockfd);
                         sockfd = fd;
-                        printf("Connected to %s:%s (fd=%d)\r\n", host, port, fd);
+                        printf("Connected to %s:%s (fd=%d)\n", host, port, fd);
                     }
                 }
                 reprint_prompt(username);
@@ -161,6 +141,7 @@ int client_run(void)
 
     if (sockfd != -1)
         close(sockfd);
+
     printf("Client exiting.\n");
     return 0;
 }

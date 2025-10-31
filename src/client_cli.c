@@ -82,6 +82,11 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
             printf("Usage: register <name>\n");
             return false;
         }
+        if (username && username[0] != '\0')
+        {
+            printf("You are already registered as '%s'. Disconnect or restart to change username.\n", username);
+            return false;
+        }
         if (*sockfd == -1)
         {
             printf("Not connected to a server.\r\n");
