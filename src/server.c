@@ -646,16 +646,115 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
         }
         else if (strcmp(cmd, CMD_MOVE) == 0)
         {
-            printf("Client fd=%d requested MOVE\n", c->fd);
-            // Handle the move command
+            /* Expected proto: MOVE <from> <game_id> <pit>
+             * where <pit> can be either 0..11 (absolute) or 0..5 (relative to player side).
+             */
+            char *from = NULL;
+            char *game_id_str = NULL;
+            char *pit = NULL;
+            if (args) {
+                from = strtok(args, " ");
+                game_id_str = strtok(NULL, " ");
+                pit = strtok(NULL, " \n");
+            }
+            if (!from || !game_id_str || !pit) {
+                char resp[PROTO_MAX_LINE];
+                snprintf(resp, sizeof(resp), "ERROR Invalid MOVE command format\n");
+                send_all(c->fd, resp, strlen(resp));
+            } else {
+                uint64_t game_id = strtoull(game_id_str, NULL, 10);
+                game_t *game = NULL;
+                if (server_get_game(state, game_id, &game) != 0) {
+                    char resp[PROTO_MAX_LINE];
+                    snprintf(resp, sizeof(resp), "ERROR Game %lu not found\n", game_id);
+                    send_all(c->fd, resp, strlen(resp));
+                } else {
+                    /* Resolve player side from username */
+                    player_t pside;
+                    if (strcmp(from, game->player_name[0]) == 0) pside = PLAYER_A;
+                    else if (strcmp(from, game->player_name[1]) == 0) pside = PLAYER_B;
+                    else {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "ERROR Unknown player %s for game %lu\n", from, game_id);
+                        send_all(c->fd, resp, strlen(resp));
+                        goto move_done;
+                    }
 
-            char *from = strtok(args, " ");
-            char *game_id_str = strtok(NULL, " ");
-            char *pit = strtok(NULL, " ");
-            printf("Parsed from: %s\n", from);
-            printf("Parsed game_id_str: %s\n", game_id_str);
-            printf("Parsed pit: %s\n", pit);
-            
+                    int pit_input = atoi(pit);
+                    int pit_index = -1;
+                    if (pit_input >= 0 && pit_input < N_PITS) {
+                        /* absolute index provided */
+                        pit_index = pit_input;
+                    } else if (pit_input >= 0 && pit_input < N_PITS/2) {
+                        /* relative index 0..5 provided — map to player's side */
+                        if (pside == PLAYER_A) pit_index = pit_input;
+                        else pit_index = pit_input + N_PITS/2;
+                    } else {
+                        /* fallback: treat small numbers as relative */
+                        if (pside == PLAYER_A && pit_input >= 0 && pit_input <= N_PITS/2 - 1)
+                            pit_index = pit_input;
+                    }
+
+                    if (pit_index < 0 || pit_index >= N_PITS) {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "ERROR Invalid pit index %d\n", pit_input);
+                        send_all(c->fd, resp, strlen(resp));
+                        goto move_done;
+                    }
+
+                    /* Check legality and apply move */
+                    if (!game_is_move_legal(game, pside, pit_index)) {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "ERROR Illegal move by %s in game %lu pit %d\n", from, game_id, pit_index);
+                        send_all(c->fd, resp, strlen(resp));
+                        goto move_done;
+                    }
+
+                    if (!game_make_move(game, pside, pit_index)) {
+                        char resp[PROTO_MAX_LINE];
+                        snprintf(resp, sizeof(resp), "ERROR Failed to apply move by %s in game %lu\n", from, game_id);
+                        send_all(c->fd, resp, strlen(resp));
+                        goto move_done;
+                    }
+
+                    /* Success: notify the mover and broadcast updated board to both players */
+                    {
+                        char ok[PROTO_MAX_LINE];
+                        snprintf(ok, sizeof(ok), "MOVE_OK %s %lu %d\n", from, game_id, pit_index);
+                        send_all(c->fd, ok, strlen(ok));
+
+                        /* prepare board text */
+                        char boardbuf[PROTO_MAX_LINE];
+                        int nw = game_print(game, boardbuf, sizeof(boardbuf));
+
+                        /* find sockets for players from server state */
+                        int fdA = -1, fdB = -1;
+                        for (int u = 0; u < SERVER_MAX_USERS; ++u) {
+                            if (state->users[u].username[0] == '\0') continue;
+                            if (strcmp(state->users[u].username, game->player_name[0]) == 0) fdA = state->users[u].socket_fd;
+                            if (strcmp(state->users[u].username, game->player_name[1]) == 0) fdB = state->users[u].socket_fd;
+                        }
+
+                        if (nw < 0) {
+                            char err[PROTO_MAX_LINE];
+                            snprintf(err, sizeof(err), "ERROR cannot render game %lu\n", game_id);
+                            if (fdA != -1) send_all(fdA, err, strlen(err));
+                            if (fdB != -1) send_all(fdB, err, strlen(err));
+                        } else {
+                            if (fdA != -1) send_all(fdA, boardbuf, (size_t)nw);
+                            if (fdB != -1) send_all(fdB, boardbuf, (size_t)nw);
+                        }
+
+                        if (game_is_over(game)) {
+                            char fin[PROTO_MAX_LINE];
+                            snprintf(fin, sizeof(fin), "GAME_FINISHED %lu\n", game_id);
+                            if (fdA != -1) send_all(fdA, fin, strlen(fin));
+                            if (fdB != -1) send_all(fdB, fin, strlen(fin));
+                        }
+                    }
+                }
+            }
+        move_done: ;
         }
         else
         {
