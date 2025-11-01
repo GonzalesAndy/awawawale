@@ -107,16 +107,24 @@ bool game_make_move(game_t *g, player_t p, int pit_index)
         seeds--;
     }
 
-    /* simple capture logic: capture when last seed lands on opponent half with 2 or 3 seeds */
+    /* capture logic (Awalé style): if the last seed lands in the opponent's
+     * half and that pit contains 2 or 3 seeds, capture it. Continue moving
+     * backwards capturing consecutive opponent pits that contain 2 or 3
+     * seeds. This implements the standard backward-capture rule.
+     */
     if (p == PLAYER_A && index >= N_PITS/2) {
-        if (g->pits[index] == 2 || g->pits[index] == 3) {
-            g->score[0] += g->pits[index];
-            g->pits[index] = 0;
+        int j = index;
+        while (j >= N_PITS/2 && (g->pits[j] == 2 || g->pits[j] == 3)) {
+            g->score[0] += g->pits[j];
+            g->pits[j] = 0;
+            j--;
         }
     } else if (p == PLAYER_B && index < N_PITS/2) {
-        if (g->pits[index] == 2 || g->pits[index] == 3) {
-            g->score[1] += g->pits[index];
-            g->pits[index] = 0;
+        int j = index;
+        while (j >= 0 && j < N_PITS/2 && (g->pits[j] == 2 || g->pits[j] == 3)) {
+            g->score[1] += g->pits[j];
+            g->pits[j] = 0;
+            j--;
         }
     }
 
