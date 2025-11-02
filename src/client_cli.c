@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "client.h"
 #include "protocol.h"
@@ -25,17 +26,25 @@ void client_cli_print_help(void)
     printf("  friend_add <user>     - add a friend\n");
     printf("  friend_remove <user>  - remove a friend\n");
     printf("  friends               - list your friends\n");
+    printf("  focus <game-id>       - set active game\n");
+    printf("  show_games            - list your ongoing games\n");
+    printf("  move <pit|game pit>   - play a move in focused game or specific game\n");
+    printf("  show_board [game-id]  - show board for focused game or specific id\n");
     printf("  help                  - show this help\n");
     printf("  quit                  - exit\n\n\n");
 }
 
-void client_cli_print_prompt(const char *username)
+void client_cli_print_prompt(const char *username, unsigned long focused_game_id)
 {
     const char *GREEN = "\x1b[32m";
     const char *CYAN = "\x1b[36m";
     const char *RESET = "\x1b[0m";
+    const char *YELLOW = "\x1b[33m";
     if (username && username[0] != '\0')
-        printf("%sawalé%s %s%s%s> ", CYAN, RESET, GREEN, username, RESET);
+        if (focused_game_id != 0)
+            printf("%sawalé%s %s%s%s %s[g-%lu]%s> ", CYAN, RESET, GREEN, username, RESET, YELLOW, focused_game_id, RESET);
+        else
+            printf("%sawalé%s %s%s%s> ", CYAN, RESET, GREEN, username, RESET);
     else
         printf("%sawalé%s > ", CYAN, RESET);
     fflush(stdout);
@@ -288,6 +297,39 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
             return false;
         }
         proto_build_list_friends(out, PROTO_MAX_LINE, username);
+        return true;
+    }
+    else if (strcmp(cmd, "focus") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *gid = strtok(NULL, " \n");
+        if (!gid) { printf("Usage: focus <game-id>\n"); return false; }
+        proto_build_focus(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
+        return true;
+    }
+    else if (strcmp(cmd, "show_games") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        proto_build_show_games(out, PROTO_MAX_LINE, username);
+        return true;
+    }
+    else if (strcmp(cmd, "move") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *a = strtok(NULL, " \n");
+        char *b = strtok(NULL, " \n");
+        uint64_t gid = 0; int pit = -1;
+        if (a && b) { gid = strtoull(a, NULL, 10); pit = atoi(b); }
+        else if (a) { pit = atoi(a); }
+        else { printf("Usage: move <pit|game-id pit>\n"); return false; }
+        proto_build_move(out, PROTO_MAX_LINE, username, gid, pit);
+        return true;
+    }
+    else if (strcmp(cmd, "show_board") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *gid = strtok(NULL, " \n");
+        proto_build_show_board(out, PROTO_MAX_LINE, username, gid ? strtoull(gid, NULL, 10) : 0);
         return true;
     }
 

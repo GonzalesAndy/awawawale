@@ -42,6 +42,24 @@ char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, c
     return dest;
 }
 
+char *proto_build_focus(char *dest, size_t n, const char *from, uint64_t game_id) {
+    if (!dest || !from) return NULL;
+    snprintf(dest, n, "%s %s %lu\n", CMD_FOCUS, from, game_id);
+    return dest;
+}
+
+char *proto_build_show_games(char *dest, size_t n, const char *from) {
+    if (!dest || !from) return NULL;
+    snprintf(dest, n, "%s %s\n", CMD_SHOW_GAMES, from);
+    return dest;
+}
+
+char *proto_build_show_board(char *dest, size_t n, const char *from, uint64_t game_id) {
+    if (!dest || !from) return NULL;
+    snprintf(dest, n, "%s %s %lu\n", CMD_SHOW_BOARD, from, game_id);
+    return dest;
+}
+
 char *proto_build_group_create(char *dest, size_t n, const char *owner, const char *group_name) {
     if (!dest || !owner || !group_name) return NULL;
     snprintf(dest, n, "%s %s %s\n", CMD_GROUP_CREATE, owner, group_name);

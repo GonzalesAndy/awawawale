@@ -5,7 +5,7 @@
 #include "protocol.h"
 
 void client_cli_print_help(void);
-void client_cli_print_prompt(const char *username);
+void client_cli_print_prompt(const char *username, unsigned long focused_game_id);
 
 // Parse a CLI line. If it represents a server command, write the protocol
 // line into out and return true. Returns false for purely local commands.

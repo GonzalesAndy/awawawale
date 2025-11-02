@@ -1,6 +1,7 @@
 #include "game.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -48,19 +49,18 @@ void game_print(const game_t *g) {
     printf("Scores: Player A = %d, Player B = %d\n", g->score[0], g->score[1]);
     printf("Turn: Player %s\n", g->turn == PLAYER_A ? "A" : "B");
     printf("\n");
-        printf("                 Cases\n");
+    printf("                 Cases\n");
     printf("             11    10    9    8    7    6\n");
     printf("           ┌────┬────┬────┬────┬────┬────┐\n");
     printf(" Player B  |");
     for (int i = N_PITS - 1; i >= N_PITS/2; i--) printf(" %2d │", g->pits[i]);
-    
     printf("  ← sens de jeu\n");
     printf("           ├────┼────┼────┼────┼────┼────┤\n");
     printf(" → sens de │");
     for (int i = 0; i < N_PITS/2; i++) printf(" %2d │", g->pits[i]);
     printf(" Player A \n");
     printf("     jeu   └────┴────┴────┴────┴────┴────┘\n");
-    printf("              0    1    2    3    4    5\n");   
+    printf("              0    1    2    3    4    5\n");
 }
 
 bool game_make_move(game_t *g, player_t p, int pit_index) 
@@ -81,16 +81,24 @@ bool game_make_move(game_t *g, player_t p, int pit_index)
         seeds--;
     }
 
-    /* simple capture logic: capture when last seed lands on opponent half with 2 or 3 seeds */
+    /* capture logic (Awalé style): if the last seed lands in the opponent's
+     * half and that pit contains 2 or 3 seeds, capture it. Continue moving
+     * backwards capturing consecutive opponent pits that contain 2 or 3
+     * seeds. This implements the standard backward-capture rule.
+     */
     if (p == PLAYER_A && index >= N_PITS/2) {
-        if (g->pits[index] == 2 || g->pits[index] == 3) {
-            g->score[0] += g->pits[index];
-            g->pits[index] = 0;
+        int j = index;
+        while (j >= N_PITS/2 && (g->pits[j] == 2 || g->pits[j] == 3)) {
+            g->score[0] += g->pits[j];
+            g->pits[j] = 0;
+            j--;
         }
     } else if (p == PLAYER_B && index < N_PITS/2) {
-        if (g->pits[index] == 2 || g->pits[index] == 3) {
-            g->score[1] += g->pits[index];
-            g->pits[index] = 0;
+        int j = index;
+        while (j >= 0 && j < N_PITS/2 && (g->pits[j] == 2 || g->pits[j] == 3)) {
+            g->score[1] += g->pits[j];
+            g->pits[j] = 0;
+            j--;
         }
     }
 
@@ -111,7 +119,6 @@ bool game_make_move(game_t *g, player_t p, int pit_index)
     return true;
 }
 
-
 /* Minimal helper implementations */
 bool game_is_move_legal(const game_t *g, player_t p, int pit_index) {
     if (!g) return false;
@@ -125,3 +132,82 @@ bool game_is_move_legal(const game_t *g, player_t p, int pit_index) {
     return true;
 }
 
+static void append_str(char *dest, size_t n, size_t *used, const char *fmt, ...)
+{
+    if (*used >= n)
+        return;
+
+    va_list args;
+    va_start(args, fmt);
+    int w = vsnprintf(dest + *used, n - *used, fmt, args);
+    va_end(args);
+
+    if (w > 0)
+        *used += (size_t)w;
+}
+
+char *game_to_string(const game_t *g, char *dest, size_t n) // TODO : Check the shown player turn 
+{
+    if (!g || !dest || n == 0)
+        return NULL;
+
+    size_t used = 0;
+    int half = N_PITS / 2;
+
+    // Header
+    append_str(dest, n, &used, "====================================\n");
+    append_str(dest, n, &used, " Scores:\n");
+    append_str(dest, n, &used, "   Player A (%s): %2d     Player B (%s): %2d\n", g->player_name[0], g->score[0], g->player_name[1], g->score[1]);
+    append_str(dest, n, &used, " Turn: Player %c\n", g->turn == PLAYER_A ? 'A' : 'B');
+    append_str(dest, n, &used, "====================================\n\n");
+
+    // Top indices (B side)
+    append_str(dest, n, &used, "          ");
+    for (int i = N_PITS - 1; i >= half; i--)
+        append_str(dest, n, &used, " %2d  ", i);
+    append_str(dest, n, &used, "\n");
+
+    // Top border
+    append_str(dest, n, &used, "        ┌");
+    for (int i = 0; i < half - 1; i++)
+        append_str(dest, n, &used, "────┬");
+    append_str(dest, n, &used, "────┐\n");
+
+    // Player B row
+    append_str(dest, n, &used, "Player B│");
+    for (int i = N_PITS - 1; i >= half; i--)
+        append_str(dest, n, &used, " %2d │", g->pits[i]);
+    append_str(dest, n, &used, " ← sens du jeu\n");
+
+    // Separator
+    append_str(dest, n, &used, "        ├");
+    for (int i = 0; i < half - 1; i++)
+        append_str(dest, n, &used, "────┼");
+    append_str(dest, n, &used, "────┤\n");
+
+    // Player A row
+    append_str(dest, n, &used, "Player A│");
+    for (int i = 0; i < half; i++)
+        append_str(dest, n, &used, " %2d │", g->pits[i]);
+    append_str(dest, n, &used, " → sens du jeu\n");
+
+    // Bottom border
+    append_str(dest, n, &used, "        └");
+    for (int i = 0; i < half - 1; i++)
+        append_str(dest, n, &used, "────┴");
+    append_str(dest, n, &used, "────┘\n");
+
+    // Bottom indices
+    append_str(dest, n, &used, "          ");
+    for (int i = 0; i < half; i++)
+        append_str(dest, n, &used, " %2d  ", i);
+    append_str(dest, n, &used, "\n");
+
+    // Final termination
+    if (used >= n)
+        dest[n - 1] = '\0';
+    else
+        dest[used] = '\0';
+
+    return dest;
+}

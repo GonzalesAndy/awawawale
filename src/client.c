@@ -11,20 +11,21 @@
 #include <sys/select.h>
 #include <stdbool.h>
 
-static void reprint_prompt(const char *username)
+static void reprint_prompt(const char *username, unsigned long focused_game_id)
 {
-    client_cli_print_prompt(username);
+    client_cli_print_prompt(username, focused_game_id);
 }
 
 int client_run(void)
 {
     char username[64] = "";
+    unsigned long focused_game_id = 0;
     int sockfd = -1;
     char line[PROTO_MAX_LINE];
 
     printf("Awalé CLI client. Type 'help' for commands.\n");
     client_cli_print_help();
-    reprint_prompt(username);
+    reprint_prompt(username, focused_game_id);
 
     while (1)
     {
@@ -38,6 +39,7 @@ int client_run(void)
             if (sockfd > maxfd)
                 maxfd = sockfd;
         }
+
         int sel = select(maxfd + 1, &readfds, NULL, NULL, NULL);
         if (sel < 0)
         {
@@ -45,6 +47,7 @@ int client_run(void)
             break;
         }
 
+        // Handle incoming messages
         if (sockfd != -1 && FD_ISSET(sockfd, &readfds))
         {
             char buf[PROTO_MAX_LINE];
@@ -65,9 +68,7 @@ int client_run(void)
             char *lineptr = strtok(buf, "\n");
             while (lineptr)
             {
-                while (*lineptr == ' ')
-                    ++lineptr;
-
+                // Handle protocol messages that need parsing
                 if (strncmp(lineptr, "REGISTERED ", 11) == 0)
                 {
                     const char *name = lineptr + 11;
@@ -79,18 +80,31 @@ int client_run(void)
                         username[sizeof(username) - 1] = '\0';
                     }
                 }
+                else if (strncmp(lineptr, "FOCUSED ", 8) == 0)
+                {
+                    const char *gid_str = lineptr + 8;
+                    while (*gid_str == ' ')
+                        ++gid_str;
+                    if (*gid_str)
+                        focused_game_id = strtoul(gid_str, NULL, 10);
+                }
+                else
+                {
+                    printf("\r\x1b[2K\x1b[35m%s\x1b[0m\n", lineptr);
+                }
 
-                printf("\r\x1b[2K%sServer:%s %s\n", "\x1b[35m", "\x1b[0m", lineptr);
                 lineptr = strtok(NULL, "\n");
             }
 
-            reprint_prompt(username);
+            reprint_prompt(username, focused_game_id);
         }
 
+        // Handle user input
         if (FD_ISSET(STDIN_FILENO, &readfds))
         {
             if (!fgets(line, sizeof(line), stdin))
                 break;
+
             size_t len = strlen(line);
             if (len && line[len - 1] == '\n')
                 line[len - 1] = '\0';
@@ -98,7 +112,7 @@ int client_run(void)
             if (strlen(line) == 0)
             {
                 printf("\x1b[1A\x1b[2K");
-                reprint_prompt(username);
+                reprint_prompt(username, focused_game_id);
                 continue;
             }
 
@@ -118,7 +132,7 @@ int client_run(void)
                         printf("Connected to %s:%s (fd=%d)\n", host, port, fd);
                     }
                 }
-                reprint_prompt(username);
+                reprint_prompt(username, focused_game_id);
                 continue;
             }
 
@@ -134,7 +148,7 @@ int client_run(void)
             {
                 if (strcmp(line, "quit") == 0)
                     break;
-                reprint_prompt(username);
+                reprint_prompt(username, focused_game_id);
             }
         }
     }

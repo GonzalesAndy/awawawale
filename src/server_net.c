@@ -18,6 +18,7 @@ static void client_init(client_t *c)
     c->name[0] = '\0';
     c->buf_len = 0;
     c->buf[0] = '\0';
+    c->focused_game_id = 0;
 }
 
 static int create_and_bind(int port)
