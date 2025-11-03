@@ -81,11 +81,6 @@ bool game_make_move(game_t *g, player_t p, int pit_index)
         seeds--;
     }
 
-    /* capture logic (Awalé style): if the last seed lands in the opponent's
-     * half and that pit contains 2 or 3 seeds, capture it. Continue moving
-     * backwards capturing consecutive opponent pits that contain 2 or 3
-     * seeds. This implements the standard backward-capture rule.
-     */
     if (p == PLAYER_A && index >= N_PITS/2) {
         int j = index;
         while (j >= N_PITS/2 && (g->pits[j] == 2 || g->pits[j] == 3)) {
@@ -146,7 +141,7 @@ static void append_str(char *dest, size_t n, size_t *used, const char *fmt, ...)
         *used += (size_t)w;
 }
 
-char *game_to_string(const game_t *g, char *dest, size_t n) // TODO : Check the shown player turn 
+char *game_to_string(const game_t *g, char *dest, size_t n)
 {
     if (!g || !dest || n == 0)
         return NULL;

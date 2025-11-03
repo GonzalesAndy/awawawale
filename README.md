@@ -26,22 +26,22 @@ Question for teacher:
 - [X] Client can challenge another client (`CHALLENGE` handling + server pending-challenge store in `src/server.c`)
 - [X] Client can accept or refuse (`ACCEPT` / `REFUSE` handling in `src/server.c`)
 
-- [ ] Match creation on accept: server generates a game id when accepting a challenge (`server_accept_challenge` returns a game id) but full game creation and wiring into `server_state_t.games` is not implemented
+- [X] Match creation on accept: server generates a game id when accepting a challenge (`server_accept_challenge` returns a game id) but full game creation and wiring into `server_state_t.games` is not implemented
 
 - [X] Server decides who starts randomly (game_init in `src/game.c` uses random start)
 
-- [ ] Server verifies move legality: game logic exists, but server does not yet apply/verify moves inside a stored game (no `server_create_game_from_challenge`/`server_get_game` implementations found)
+- [X] Server verifies move legality: game logic exists, but server does not yet apply/verify moves inside a stored game (no `server_create_game_from_challenge`/`server_get_game` implementations found)
 
 #### Step 3: Multiple Games & Observers
 
-- [ ] Multiple simultaneous games: server data structures exist (`server_state_t.games[]`), but management functions are only declared in `src/server.h` and not implemented in `src/server.c`
+- [X] Multiple simultaneous games: server data structures exist (`server_state_t.games[]`), but management functions are only declared in `src/server.h` and not implemented in `src/server.c`
 
 - [ ] Listing ongoing games: not implemented
 - [ ] Observer mode (watching games): not implemented (observer fields exist in `game_t` but server-side delivery not implemented)
 
 #### Step 4: Chat System
 
-- [ ] Basic chat protocol : not implemented
+- [X] Basic chat protocol
 
 #### Step 5: Player Profiles
 
@@ -56,11 +56,4 @@ Question for teacher:
 - [ ] Append-only game record function implemented (`persist_append_game` in `src/persist.c`)
 
 - [ ] Full replay storage and retrieval (list/load by id) are declared but not implemented (`persist_list_saved_games`, `persist_load_game_by_id` not implemented)
-
-Suggested next steps:
-
-- Implement `server_create_game_from_challenge`, `server_get_game` and wire accepted challenges to actually create `game_t` entries in `server_state_t.games`.
-- Add server-side handling for `MOVE` to validate with `game_is_move_legal` and apply with `game_make_move`, then broadcast `GAME_UPDATE` to players and observers.
-- Implement the persistence read/list functions to allow saving/replaying finished games.
-
 

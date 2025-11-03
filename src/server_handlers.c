@@ -122,6 +122,7 @@ static int handle_list_users(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
+// TODO : Maybe do not permit sending a challenge if u already have a running game with him
 static int handle_challenge(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)self;
@@ -178,7 +179,8 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
     if (rv == 0)
     {
         uint64_t created_gid = 0;
-        if (server_create_game_from_challenge(state, challenger, acceptor, &created_gid) == 0) {
+        if (server_create_game_from_challenge(state, challenger, acceptor, &created_gid) == 0)
+        {
             gid = created_gid;
         }
         int notified = 0;
@@ -210,14 +212,18 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
         }
         // Also show initial board to both players
         game_t *g = NULL;
-        if (server_get_game(state, gid, &g) == 0 && g) {
+        if (server_get_game(state, gid, &g) == 0 && g)
+        {
             char board[PROTO_MAX_LINE];
             game_to_string(g, board, sizeof(board));
             char init_msg[PROTO_MAX_LINE];
-            snprintf(init_msg, sizeof(init_msg), "BOARD_BEGIN %lu\n%sBOARD_END\n", (unsigned long)gid, board);
-            for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i) {
-                if (clients[i].fd == -1) continue;
-                if (strcmp(clients[i].name, acceptor) == 0 || strcmp(clients[i].name, challenger) == 0) {
+            snprintf(init_msg, sizeof(init_msg), "\n%s\n", board);
+            for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
+            {
+                if (clients[i].fd == -1)
+                    continue;
+                if (strcmp(clients[i].name, acceptor) == 0 || strcmp(clients[i].name, challenger) == 0)
+                {
                     safe_send(clients[i].fd, init_msg);
                 }
             }
@@ -233,51 +239,113 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
 static int handle_move(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *from = strtok(args, " ");
     char *gid_s = strtok(NULL, " ");
     char *pit_s = strtok(NULL, " \n");
-    if (!from || !pit_s) return -1;
+    if (!from || !pit_s)
+        return -1;
     uint64_t gid = 0;
-    if (gid_s) gid = strtoull(gid_s, NULL, 10);
-    if (gid == 0) gid = self->focused_game_id;
-    if (gid == 0) { safe_send(self->fd, "ERROR no focused game\n"); return -1; }
+    if (gid_s)
+        gid = strtoull(gid_s, NULL, 10);
+    if (gid == 0)
+        gid = self->focused_game_id;
+    if (gid == 0)
+    {
+        safe_send(self->fd, "ERROR no focused game\n");
+        return -1;
+    }
 
     game_t *g = NULL;
-    if (server_get_game(state, gid, &g) != 0 || !g) { safe_send(self->fd, "ERROR game not found\n"); return -1; }
+    if (server_get_game(state, gid, &g) != 0 || !g)
+    {
+        safe_send(self->fd, "ERROR game not found\n");
+        return -1;
+    }
 
     player_t p = (strcmp(from, g->player_name[0]) == 0) ? PLAYER_A : (strcmp(from, g->player_name[1]) == 0 ? PLAYER_B : (player_t)2);
-    if (p == (player_t)2) { safe_send(self->fd, "ERROR not a player in this game\n"); return -1; }
+    if (p == (player_t)2)
+    {
+        safe_send(self->fd, "ERROR not a player in this game\n");
+        return -1;
+    }
     int pit = atoi(pit_s);
-    if (!game_is_move_legal(g, p, pit)) { safe_send(self->fd, "ERROR illegal move\n"); return -1; }
-    if (!game_make_move(g, p, pit)) { safe_send(self->fd, "ERROR move failed\n"); return -1; }
+    if (!game_is_move_legal(g, p, pit))
+    {
+        safe_send(self->fd, "ERROR illegal move\n");
+        return -1;
+    }
+    if (!game_make_move(g, p, pit))
+    {
+        safe_send(self->fd, "ERROR move failed\n");
+        return -1;
+    }
 
     char board[PROTO_MAX_LINE];
     game_to_string(g, board, sizeof(board));
 
     char msg[PROTO_MAX_LINE];
     snprintf(msg, sizeof(msg), "\n%s\n", board);
-    for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i) {
-        if (clients[i].fd == -1) continue;
-        if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0) {
+    for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
+    {
+        if (clients[i].fd == -1)
+            continue;
+        if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0)
+        {
             safe_send(clients[i].fd, msg);
         }
+    }
+    if (g->state == GAME_STATE_FINISHED)
+    {
+        // TODO : test endgame condition
+        char out[PROTO_MAX_LINE];
+        if (g->score[0] > g->score[1])
+        {
+            snprintf(out, sizeof(out), "GAME_OVER %s %d %s %d WINNER %s\n", g->player_name[0], g->score[0], g->player_name[1], g->score[1], g->player_name[0]);
+        }
+        else if (g->score[1] > g->score[0])
+        {
+            snprintf(out, sizeof(out), "GAME_OVER %s %d %s %d WINNER %s\n", g->player_name[0], g->score[0], g->player_name[1], g->score[1], g->player_name[1]);
+        }
+        else
+        {
+            snprintf(out, sizeof(out), "GAME_OVER %s %d %s %d DRAW\n", g->player_name[0], g->score[0], g->player_name[1], g->score[1]);
+        }
+        for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
+        {
+            if (clients[i].fd == -1)
+                continue;
+            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0)
+            {
+                safe_send(clients[i].fd, out);
+            }
+        }
+
+        // TODO : persist_append_game(g, "games.log");
+        server_remove_game(state, g->id);
     }
     return 0;
 }
 
 static int handle_show_games(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)clients; (void)state;
-    if (!args) return -1;
+    (void)clients;
+    (void)state;
+    if (!args)
+        return -1;
     char *from = strtok(args, " \n");
-    if (!from) return -1;
+    if (!from)
+        return -1;
 
-    char out[PROTO_MAX_LINE]; out[0] = '\0';
+    char out[PROTO_MAX_LINE];
+    out[0] = '\0';
     strncat(out, "GAMES", sizeof(out) - strlen(out) - 1);
-    for (int i = 0; i < state->games_count; ++i) {
+    for (int i = 0; i < state->games_count; ++i)
+    {
         game_t *g = &state->games[i];
-        if (strcmp(g->player_name[0], from) == 0 || strcmp(g->player_name[1], from) == 0) {
+        if (strcmp(g->player_name[0], from) == 0 || strcmp(g->player_name[1], from) == 0)
+        {
             char tmp[64];
             snprintf(tmp, sizeof(tmp), " %lu", (unsigned long)g->id);
             strncat(out, tmp, sizeof(out) - strlen(out) - 1);
@@ -290,15 +358,41 @@ static int handle_show_games(server_state_t *state, client_t *self, client_t *cl
 
 static int handle_focus(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)clients; (void)state;
-    if (!args) return -1;
+    (void)clients;
+    (void)state;
+    if (!args)
+        return -1;
     char *from = strtok(args, " ");
     char *gid_s = strtok(NULL, " \n");
-    if (!from || !gid_s) return -1;
+    if (!from || !gid_s)
+        return -1;
     uint64_t gid = strtoull(gid_s, NULL, 10);
-    self->focused_game_id = gid;
+    int game_found = 0;
+    for (int i = 0; i < state->games_count; ++i)
+    {
+        game_t *g = &state->games[i];
+        if (g->id == gid)
+        {
+            if (strcmp(g->player_name[0], from) != 0 && strcmp(g->player_name[1], from) != 0)
+            {
+                safe_send(self->fd, "ERROR not a player in this game\n");
+                return -1;
+            }
+            game_found = 1;
+            break;
+        }
+    }
     char out[PROTO_MAX_LINE];
-    snprintf(out, sizeof(out), "FOCUSED %lu\n", (unsigned long)gid);
+    if (!game_found)
+    {
+        safe_send(self->fd, "ERROR game not found\n");
+        return -1;
+    }
+    else
+    {
+        self->focused_game_id = gid;
+        snprintf(out, sizeof(out), "FOCUSED %lu\n", (unsigned long)gid);
+    }
     safe_send(self->fd, out);
     return 0;
 }
@@ -306,13 +400,23 @@ static int handle_focus(server_state_t *state, client_t *self, client_t *clients
 static int handle_show_board(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *from = strtok(args, " ");
     char *gid_s = strtok(NULL, " \n");
     (void)from;
     uint64_t gid = gid_s ? strtoull(gid_s, NULL, 10) : self->focused_game_id;
-    if (gid == 0) { safe_send(self->fd, "ERROR no focused game\n"); return -1; }
-    game_t *g = NULL; if (server_get_game(state, gid, &g) != 0) { safe_send(self->fd, "ERROR game not found\n"); return -1; }
+    if (gid == 0)
+    {
+        safe_send(self->fd, "ERROR no focused game\n");
+        return -1;
+    }
+    game_t *g = NULL;
+    if (server_get_game(state, gid, &g) != 0)
+    {
+        safe_send(self->fd, "ERROR game not found\n");
+        return -1;
+    }
     char board[PROTO_MAX_LINE];
     game_to_string(g, board, sizeof(board));
     char out[PROTO_MAX_LINE];
@@ -493,10 +597,12 @@ static int handle_group_quit(server_state_t *state, client_t *self, client_t *cl
 static int handle_friend_add(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *owner = strtok(args, " ");
     char *fuser = strtok(NULL, " \n");
-    if (!owner || !fuser) return -1;
+    if (!owner || !fuser)
+        return -1;
     if (server_friend_add(state, owner, fuser) == 0)
     {
         char out[PROTO_MAX_LINE];
@@ -511,10 +617,12 @@ static int handle_friend_add(server_state_t *state, client_t *self, client_t *cl
 static int handle_friend_remove(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *owner = strtok(args, " ");
     char *fuser = strtok(NULL, " \n");
-    if (!owner || !fuser) return -1;
+    if (!owner || !fuser)
+        return -1;
     if (server_friend_remove(state, owner, fuser) == 0)
     {
         char out[PROTO_MAX_LINE];
@@ -529,10 +637,13 @@ static int handle_friend_remove(server_state_t *state, client_t *self, client_t 
 static int handle_list_friends(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    if (!args) return -1;
+    if (!args)
+        return -1;
     char *owner = strtok(args, " \n");
-    if (!owner) return -1;
-    char out[PROTO_MAX_LINE]; out[0] = '\0';
+    if (!owner)
+        return -1;
+    char out[PROTO_MAX_LINE];
+    out[0] = '\0';
     strncat(out, CMD_FRIENDS, sizeof(out) - strlen(out) - 1);
     char friends[CLIENT_MAX_FRIENDS][GAME_MAX_USERNAME];
     int n = server_friend_list(state, owner, friends, CLIENT_MAX_FRIENDS);
