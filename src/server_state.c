@@ -109,8 +109,17 @@ int server_set_user_bio(server_state_t *s, const char *username, const char *bio
     {
         if (s->users[i].username[0] != '\0' && strcmp(s->users[i].username, username) == 0)
         {
-            strncpy(s->users[i].bio, bio_text, CLIENT_MAX_BIO - 1);
-            s->users[i].bio[CLIENT_MAX_BIO - 1] = '\0';
+            // Unescape any literal "\\n" sequences into actual newlines
+            size_t src_i = 0, dst_i = 0;
+            while (bio_text[src_i] != '\0' && dst_i + 1 < CLIENT_MAX_BIO) {
+                if (bio_text[src_i] == '\\' && bio_text[src_i+1] == 'n') {
+                    s->users[i].bio[dst_i++] = '\n';
+                    src_i += 2;
+                } else {
+                    s->users[i].bio[dst_i++] = bio_text[src_i++];
+                }
+            }
+            s->users[i].bio[dst_i] = '\0';
             return 0;
         }
     }

@@ -13,7 +13,7 @@ void client_cli_print_help(void)
     printf("Commands:\n");
     printf("  connect <host> <port> - connect to server\n");
     printf("  register <name>       - set your username\n");
-    printf("  bio <text>            - set your bio\n");
+    printf("  bio <text>            - set your bio (or run 'bio' then enter up to 10 lines, end with a single . on its own line)\n");
     printf("  show_bio <username>   - show a user's bio, if empty show your own\n");
     printf("  list                  - request list of users\n");
     printf("  challenge <user>      - challenge a user\n");
@@ -107,17 +107,37 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     else if (strcmp(cmd, "bio") == 0)
     {
         char *bio_text = strtok(NULL, "");
+        char assembled[CLIENT_MAX_BIO];
+        assembled[0] = '\0';
         if (!bio_text)
         {
-            printf("Usage: bio <text>\n");
-            return false;
+            // Enter interactive multi-line bio mode
+            printf("Enter your bio. Up to 10 lines. End with a single '.' on its own line.\n");
+            char linebuf[256];
+            int lines = 0;
+            while (lines < 10) {
+                if (!fgets(linebuf, sizeof(linebuf), stdin)) break;
+                // remove trailing newline
+                size_t L = strlen(linebuf);
+                if (L && linebuf[L-1] == '\n') linebuf[--L] = '\0';
+                if (strcmp(linebuf, ".") == 0) break;
+                if (assembled[0] != '\0') strncat(assembled, "\\n", sizeof(assembled) - strlen(assembled) - 1);
+                strncat(assembled, linebuf, sizeof(assembled) - strlen(assembled) - 1);
+                lines++;
+            }
+        }
+        else {
+            // single-line bio provided; use as-is
+            strncpy(assembled, bio_text, sizeof(assembled) - 1);
+            assembled[sizeof(assembled) - 1] = '\0';
         }
         if (username[0] == '\0')
         {
             printf("You must register a username first.\n");
             return false;
         }
-        proto_build_bio_set(out, PROTO_MAX_LINE, username, bio_text);
+        // assembled contains literal newlines encoded as "\\n" sequences
+        proto_build_bio_set(out, PROTO_MAX_LINE, username, assembled);
         return true;
     }
     else if (strcmp(cmd, "show_bio") == 0)
