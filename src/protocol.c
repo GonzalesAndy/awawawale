@@ -54,6 +54,12 @@ char *proto_build_show_games(char *dest, size_t n, const char *from) {
     return dest;
 }
 
+char *proto_build_list_games(char *dest, size_t n) {
+    if (!dest) return NULL;
+    snprintf(dest, n, "%s\n", CMD_LIST_GAMES);
+    return dest;
+}
+
 char *proto_build_show_board(char *dest, size_t n, const char *from, uint64_t game_id) {
     if (!dest || !from) return NULL;
     snprintf(dest, n, "%s %s %lu\n", CMD_SHOW_BOARD, from, game_id);

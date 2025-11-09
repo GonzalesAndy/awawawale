@@ -16,6 +16,7 @@ void client_cli_print_help(void)
     printf("  bio <text>            - set your bio (or run 'bio' then enter up to 10 lines, end with a single . on its own line)\n");
     printf("  show_bio <username>   - show a user's bio, if empty show your own\n");
     printf("  list                  - request list of users\n");
+    printf("  list_games            - request list of all ongoing games\n");
     printf("  challenge <user>      - challenge a user\n");
     printf("  accept <user>         - accept a challenge\n");
     printf("  refuse <user>         - refuse a challenge\n");
@@ -156,6 +157,11 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     else if (strcmp(cmd, "list") == 0)
     {
         proto_build_list_users(out, PROTO_MAX_LINE);
+        return true;
+    }
+    else if (strcmp(cmd, "list_games") == 0)
+    {
+        proto_build_list_games(out, PROTO_MAX_LINE);
         return true;
     }
     else if (strcmp(cmd, "challenge") == 0)

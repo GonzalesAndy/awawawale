@@ -660,6 +660,28 @@ static int handle_list_friends(server_state_t *state, client_t *self, client_t *
     return 0;
 }
 
+static int handle_list_games(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    (void)args;
+    if (!state)
+        return -1;
+
+    char out[PROTO_MAX_LINE];
+    out[0] = '\0';
+    strncat(out, "ONGOING_GAMES", sizeof(out) - strlen(out) - 1);
+    for (int i = 0; i < state->games_count; ++i)
+    {
+        game_t *g = &state->games[i];
+        char tmp[256];
+        snprintf(tmp, sizeof(tmp), " %lu:%s:%s", (unsigned long)g->id, g->player_name[0], g->player_name[1]);
+        strncat(out, tmp, sizeof(out) - strlen(out) - 1);
+    }
+    strncat(out, "\n", sizeof(out) - strlen(out) - 1);
+    safe_send(self->fd, out);
+    return 0;
+}
+
 // Dispatcher
 int server_dispatch_command(server_state_t *state, client_t *self, client_t *clients, const char *line_in)
 {
@@ -687,6 +709,7 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     if (strcmp(cmd, CMD_LIST_FRIENDS) == 0) return handle_list_friends(state, self, clients, args);
     if (strcmp(cmd, CMD_MOVE) == 0) return handle_move(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, clients, args);
+    if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self, clients, args);
     if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, clients, args);
 

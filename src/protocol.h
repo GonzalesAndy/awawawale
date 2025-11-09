@@ -10,6 +10,7 @@
 #define CMD_MOVE "MOVE"
 #define CMD_FOCUS "FOCUS"
 #define CMD_SHOW_GAMES "SHOW_GAMES"
+#define CMD_LIST_GAMES "LIST_GAMES"
 #define CMD_SHOW_BOARD "SHOW_BOARD"
 #define CMD_CHAT "CHAT"
 #define CMD_GROUP_CREATE "GROUP_CREATE"
@@ -46,6 +47,7 @@ char *proto_build_refuse(char *dest, size_t n, const char *from, const char *to)
 char *proto_build_move(char *dest, size_t n, const char *from, uint64_t game_id, int pit_index);
 char *proto_build_focus(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_show_games(char *dest, size_t n, const char *from);
+char *proto_build_list_games(char *dest, size_t n);
 char *proto_build_show_board(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_chat(char *dest, size_t n, const char *from, const char *to, const char *msg);
 char *proto_build_group_create(char *dest, size_t n, const char *owner, const char *group_name);
