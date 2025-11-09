@@ -92,8 +92,11 @@ static int handle_bio_show(server_state_t *state, client_t *self, client_t *clie
     char biobuf[CLIENT_MAX_BIO];
     if (server_show_user_bio(state, requester, target, biobuf, sizeof(biobuf)) == 0)
     {
-        char resp[PROTO_MAX_LINE];
-        snprintf(resp, sizeof(resp), "BIO_SHOWN %s %s\n", target, biobuf);
+        // Send as a block to preserve newlines
+    char resp[PROTO_MAX_LINE];
+    snprintf(resp, sizeof(resp), "BIO_BEGIN %s\n%s\nBIO_END\n", target, biobuf);
+        // Note: snprintf with %s and biobuf will include embedded newlines
+        // but ensure resp buffer size is respected
         safe_send(self->fd, resp);
         return 0;
     }
