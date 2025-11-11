@@ -31,6 +31,16 @@ static const char *parse_cmd(char *line, char **args)
     return line;
 }
 
+static int is_friend_of(server_state_t *state, const char *owner, const char *candidate)
+{
+    if (!state || !owner || !candidate) return 0;
+    char friends[CLIENT_MAX_FRIENDS][GAME_MAX_USERNAME];
+    int n = server_friend_list(state, owner, friends, CLIENT_MAX_FRIENDS);
+    for (int i = 0; i < n; ++i)
+        if (strcmp(friends[i], candidate) == 0) return 1;
+    return 0;
+}
+
 static int handle_register(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
@@ -298,6 +308,12 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         {
             safe_send(clients[i].fd, msg);
         }
+        else if (clients[i].observed_game_id == g->id)
+        {
+            char obs_msg[PROTO_MAX_LINE + 64];
+            snprintf(obs_msg, sizeof(obs_msg), "[SPECTATING g-%lu]\n%s", (unsigned long)g->id, msg);
+            safe_send(clients[i].fd, obs_msg);
+        }
     }
     if (g->state == GAME_STATE_FINISHED)
     {
@@ -424,6 +440,54 @@ static int handle_show_board(server_state_t *state, client_t *self, client_t *cl
     game_to_string(g, board, sizeof(board));
     char out[PROTO_MAX_LINE];
     snprintf(out, sizeof(out), "\n%s\n", board);
+    safe_send(self->fd, out);
+    return 0;
+}
+
+static int handle_observe(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!state || !args || !self) return -1;
+    char *from = strtok(args, " ");
+    char *gid_s = strtok(NULL, " \n");
+    if (!from) return -1;
+    uint64_t gid = 0;
+    if (gid_s) gid = strtoull(gid_s, NULL, 10);
+    if (gid == 0) gid = self->focused_game_id;
+    if (gid == 0) { safe_send(self->fd, "ERROR no focused game\n"); return -1; }
+    game_t *g = NULL;
+    if (server_get_game(state, gid, &g) != 0 || !g) { safe_send(self->fd, "ERROR game not found\n"); return -1; }
+    // privacy: allow if not private OR friend of either player
+    int allowed = 0;
+    if (!g->private_mode) allowed = 1;
+    /* Do NOT allow a player to spectate their own game */
+    if (strcmp(g->player_name[0], from) == 0 || strcmp(g->player_name[1], from) == 0) {
+        safe_send(self->fd, "ERROR cannot spectate your own game\n");
+        return -1;
+    }
+    if (is_friend_of(state, g->player_name[0], from) || is_friend_of(state, g->player_name[1], from)) allowed = 1;
+    if (!allowed) { safe_send(self->fd, "ERROR not allowed to spectate this private game\n"); return -1; }
+
+    // only one observed game at a time
+    self->observed_game_id = gid;
+
+    // send initial board with spectating header
+    char board[PROTO_MAX_LINE];
+    game_to_string(g, board, sizeof(board));
+    char msg[PROTO_MAX_LINE + 64];
+    snprintf(msg, sizeof(msg), "[SPECTATING g-%lu]\n\n%s\n", (unsigned long)g->id, board);
+    safe_send(self->fd, msg);
+    return 0;
+}
+
+static int handle_stop_observe(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)state; (void)clients; (void)args;
+    if (!self) return -1;
+    if (self->observed_game_id == 0) { safe_send(self->fd, "ERROR not currently spectating\n"); return -1; }
+    char out[PROTO_MAX_LINE];
+    snprintf(out, sizeof(out), "STOPPED_SPECTATING %lu\n", (unsigned long)self->observed_game_id);
+    self->observed_game_id = 0;
     safe_send(self->fd, out);
     return 0;
 }
@@ -660,16 +724,6 @@ static int handle_list_friends(server_state_t *state, client_t *self, client_t *
     return 0;
 }
 
-static int is_friend_of(server_state_t *state, const char *owner, const char *candidate)
-{
-    if (!state || !owner || !candidate) return 0;
-    char friends[CLIENT_MAX_FRIENDS][GAME_MAX_USERNAME];
-    int n = server_friend_list(state, owner, friends, CLIENT_MAX_FRIENDS);
-    for (int i = 0; i < n; ++i)
-        if (strcmp(friends[i], candidate) == 0) return 1;
-    return 0;
-}
-
 static int handle_list_games(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
@@ -774,6 +828,8 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     if (strcmp(cmd, CMD_MOVE) == 0) return handle_move(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, clients, args);
     if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self, clients, args);
+    if (strcmp(cmd, CMD_OBSERVE) == 0) return handle_observe(state, self, clients, args);
+    if (strcmp(cmd, CMD_STOP_OBSERVE) == 0) return handle_stop_observe(state, self, clients, args);
     if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, clients, args);
     if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, clients, args);

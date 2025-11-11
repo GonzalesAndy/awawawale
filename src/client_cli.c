@@ -30,6 +30,8 @@ void client_cli_print_help(void)
     printf("  focus <game-id>       - set active game\n");
     printf("  show_games            - list your ongoing games\n");
     printf("  set_private [game-id] <0|1>     - set privacy for the focused game\n");
+    printf("  observe <game-id>       - start spectating a game\n");
+    printf("  stop_observe           - stop spectating any game\n");
     printf("  move <pit|game pit>   - play a move in focused game or specific game\n");
     printf("  show_board [game-id]  - show board for focused game or specific id\n");
     printf("  help                  - show this help\n");
@@ -352,6 +354,20 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
         proto_build_set_private(out, PROTO_MAX_LINE, username, gid, flag);
         return true;
     }
+        else if (strcmp(cmd, "observe") == 0)
+        {
+            if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+            char *gid = strtok(NULL, " \n");
+            if (!gid) { printf("Usage: observe <game-id>\n"); return false; }
+            proto_build_observe(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
+            return true;
+        }
+        else if (strcmp(cmd, "stop_observe") == 0)
+        {
+            if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+            proto_build_stop_observe(out, PROTO_MAX_LINE, username, 0);
+            return true;
+        }
     else if (strcmp(cmd, "move") == 0)
     {
         if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }

@@ -14,6 +14,7 @@ typedef struct {
     char buf[PROTO_MAX_LINE];
     size_t buf_len;
     uint64_t focused_game_id; // 0 means none
+    uint64_t observed_game_id; // spectating game id (0 = none)
 } client_t;
 
 // Start the server loop and block; returns 0 on clean shutdown, >0 on error
