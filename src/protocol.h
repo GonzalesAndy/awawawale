@@ -59,7 +59,7 @@ char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_
 char *proto_build_stop_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_bio_set(char *dest, size_t n, const char *from, const char *bio_text);
 char *proto_build_bio_show(char *dest, size_t n, const char *requester, const char *target_username);
-char *proto_build_set_private(char *dest, size_t n, const char *from, int private_flag);
+char *proto_build_set_private(char *dest, size_t n, const char *from, uint64_t game_id, int private_flag);
 char *proto_build_allow_spectator(char *dest, size_t n, const char *from, const char *spectator_username);
 char *proto_build_disallow_spectator(char *dest, size_t n, const char *from, const char *spectator_username);
 

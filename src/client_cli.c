@@ -29,6 +29,7 @@ void client_cli_print_help(void)
     printf("  friends               - list your friends\n");
     printf("  focus <game-id>       - set active game\n");
     printf("  show_games            - list your ongoing games\n");
+    printf("  set_private [game-id] <0|1>     - set privacy for the focused game\n");
     printf("  move <pit|game pit>   - play a move in focused game or specific game\n");
     printf("  show_board [game-id]  - show board for focused game or specific id\n");
     printf("  help                  - show this help\n");
@@ -337,6 +338,18 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     {
         if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
         proto_build_show_games(out, PROTO_MAX_LINE, username);
+        return true;
+    }
+    else if (strcmp(cmd, "set_private") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *a = strtok(NULL, " \n");
+        char *b = strtok(NULL, " \n");
+        uint64_t gid = 0; int flag = -1;
+        if (b) { gid = strtoull(a, NULL, 10); flag = atoi(b); }
+        else if (a) { flag = atoi(a); }
+        else { printf("Usage: set_private <0|1> or set_private <game-id> <0|1>\n"); return false; }
+        proto_build_set_private(out, PROTO_MAX_LINE, username, gid, flag);
         return true;
     }
     else if (strcmp(cmd, "move") == 0)

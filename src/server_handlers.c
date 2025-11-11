@@ -660,12 +660,24 @@ static int handle_list_friends(server_state_t *state, client_t *self, client_t *
     return 0;
 }
 
+static int is_friend_of(server_state_t *state, const char *owner, const char *candidate)
+{
+    if (!state || !owner || !candidate) return 0;
+    char friends[CLIENT_MAX_FRIENDS][GAME_MAX_USERNAME];
+    int n = server_friend_list(state, owner, friends, CLIENT_MAX_FRIENDS);
+    for (int i = 0; i < n; ++i)
+        if (strcmp(friends[i], candidate) == 0) return 1;
+    return 0;
+}
+
 static int handle_list_games(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
-    (void)args;
-    if (!state)
-        return -1;
+    if (!state || !self) return -1;
+    char *requester = NULL;
+    if (self->name[0] != '\0')
+        requester = self->name;
+    if (!requester) return -1;
 
     char out[PROTO_MAX_LINE];
     out[0] = '\0';
@@ -673,11 +685,63 @@ static int handle_list_games(server_state_t *state, client_t *self, client_t *cl
     for (int i = 0; i < state->games_count; ++i)
     {
         game_t *g = &state->games[i];
-        char tmp[256];
-        snprintf(tmp, sizeof(tmp), " %lu:%s:%s", (unsigned long)g->id, g->player_name[0], g->player_name[1]);
-        strncat(out, tmp, sizeof(out) - strlen(out) - 1);
+        int visible = 1;
+        if (g->private_mode)
+        {
+            // visible if requester is one of the players
+            if (strcmp(g->player_name[0], requester) == 0 || strcmp(g->player_name[1], requester) == 0)
+                visible = 1;
+            else if (is_friend_of(state, g->player_name[0], requester) || is_friend_of(state, g->player_name[1], requester))
+                visible = 1;
+            else
+                visible = 0;
+        }
+        if (visible)
+        {
+            char tmp[256];
+            snprintf(tmp, sizeof(tmp), " %lu:%s:%s", (unsigned long)g->id, g->player_name[0], g->player_name[1]);
+            strncat(out, tmp, sizeof(out) - strlen(out) - 1);
+        }
     }
     strncat(out, "\n", sizeof(out) - strlen(out) - 1);
+    safe_send(self->fd, out);
+    return 0;
+}
+
+static int handle_set_private(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)clients;
+    if (!state || !args) return -1;
+    char *from = strtok(args, " ");
+    char *gid_s = strtok(NULL, " ");
+    char *flag_s = strtok(NULL, " \n");
+    if (!from || !flag_s) return -1;
+    uint64_t gid;
+    if (gid_s)
+        gid  = strtoull(gid_s, NULL, 10);
+    if (gid == 0)
+        gid = self->focused_game_id;
+    if (gid == 0)
+    {
+        safe_send(self->fd, "ERROR no focused game\n");
+        return -1;
+    }
+    int flag = atoi(flag_s);
+    game_t *g = NULL;
+    if (server_get_game(state, gid, &g) != 0 || !g)
+    {
+        safe_send(self->fd, "ERROR game not found\n");
+        return -1;
+    }
+    // Only players in the game may toggle privacy
+    if (strcmp(g->player_name[0], from) != 0 && strcmp(g->player_name[1], from) != 0)
+    {
+        safe_send(self->fd, "ERROR not a player in this game\n");
+        return -1;
+    }
+    g->private_mode = flag ? true : false;
+    char out[PROTO_MAX_LINE];
+    snprintf(out, sizeof(out), "PRIVATE_SET %lu %d\n", (unsigned long)g->id, g->private_mode ? 1 : 0);
     safe_send(self->fd, out);
     return 0;
 }
@@ -710,6 +774,7 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     if (strcmp(cmd, CMD_MOVE) == 0) return handle_move(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, clients, args);
     if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self, clients, args);
+    if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, clients, args);
     if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, clients, args);
 

@@ -120,6 +120,12 @@ char *proto_build_list_friends(char *dest, size_t n, const char *owner) {
     return dest;
 }
 
+char *proto_build_set_private(char *dest, size_t n, const char *from, uint64_t game_id, int private_flag) {
+    if (!dest || !from) return NULL;
+    snprintf(dest, n, "%s %s %lu %d\n", CMD_SET_PRIVATE, from, (unsigned long)game_id, private_flag ? 1 : 0);
+    return dest;
+}
+
 char *proto_parse_command(char *line, char **args) {
     if (!line) return NULL;
     size_t L = strlen(line);
