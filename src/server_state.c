@@ -192,7 +192,7 @@ int server_accept_challenge(server_state_t *s, const char *from, const char *to,
             if (s->challenges_count > 0)
                 s->challenges_count--;
             if (out_game_id)
-                *out_game_id = s->next_game_id++;
+                *out_game_id = s->next_game_id;
             return 0;
         }
     }
