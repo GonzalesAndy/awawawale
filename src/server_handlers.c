@@ -229,9 +229,9 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
         game_t *g = NULL;
         if (server_get_game(state, gid, &g) == 0 && g)
         {
-            char board[PROTO_MAX_LINE];
+            char board[PROTO_MAX_LINE + 3];
             game_to_string(g, board, sizeof(board));
-            char init_msg[PROTO_MAX_LINE];
+            char init_msg[PROTO_MAX_LINE + 30];
             snprintf(init_msg, sizeof(init_msg), "\n%s\n", board);
             for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
             {
@@ -297,10 +297,10 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         return -1;
     }
 
-    char board[PROTO_MAX_LINE];
+    char board[PROTO_MAX_LINE + 3];
     game_to_string(g, board, sizeof(board));
 
-    char msg[PROTO_MAX_LINE];
+    char msg[PROTO_MAX_LINE + 100];
     snprintf(msg, sizeof(msg), "\n%s\n", board);
     for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
     {
@@ -312,7 +312,7 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         }
         else if (clients[i].observed_game_id == g->id)
         {
-            char obs_msg[PROTO_MAX_LINE + 64];
+            char obs_msg[PROTO_MAX_LINE + 150];
             snprintf(obs_msg, sizeof(obs_msg), "[SPECTATING g-%lu]\n%s", (unsigned long)g->id, msg);
             safe_send(clients[i].fd, obs_msg);
         }
@@ -398,10 +398,10 @@ static int handle_get_replay(server_state_t *state, client_t *self, client_t *cl
     game_t initial_game;
     game_init(&initial_game, loaded_game.player_name[0], loaded_game.player_name[1]);
     initial_game.id = loaded_game.id;
-    
-    char board[PROTO_MAX_LINE];
+
+    char board[PROTO_MAX_LINE + 3];
     game_to_string(&initial_game, board, sizeof(board));
-    char msg[PROTO_MAX_LINE];
+    char msg[PROTO_MAX_LINE + 100];
     snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
     safe_send(self->fd, msg);
     
@@ -453,7 +453,7 @@ static int handle_replay_next(server_state_t *state, client_t *self, client_t *c
     
     char board[PROTO_MAX_LINE];
     game_to_string(&replay_game, board, sizeof(board));
-    char msg[PROTO_MAX_LINE];
+    char msg[PROTO_MAX_LINE + 100];
     const char *player_name = loaded_game.moves[self->replay_current_move].player == PLAYER_A ? 
                               loaded_game.player_name[0] : loaded_game.player_name[1];
     snprintf(msg, sizeof(msg), "Move %d/%d: %s played pit %d\n%s\n", 
@@ -511,7 +511,7 @@ static int handle_replay_prev(server_state_t *state, client_t *self, client_t *c
         
         char board[PROTO_MAX_LINE];
         game_to_string(&replay_game, board, sizeof(board));
-        char msg[PROTO_MAX_LINE];
+        char msg[PROTO_MAX_LINE + 100];
         const char *player_name = loaded_game.moves[self->replay_current_move].player == PLAYER_A ? 
                                   loaded_game.player_name[0] : loaded_game.player_name[1];
         snprintf(msg, sizeof(msg), "Move %d/%d: %s played pit %d\n%s\n", 
@@ -523,7 +523,7 @@ static int handle_replay_prev(server_state_t *state, client_t *self, client_t *c
         // Show initial state
         char board[PROTO_MAX_LINE];
         game_to_string(&replay_game, board, sizeof(board));
-        char msg[PROTO_MAX_LINE];
+        char msg[PROTO_MAX_LINE + 100];
         snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
         safe_send(self->fd, msg);
     }
@@ -639,7 +639,7 @@ static int handle_show_board(server_state_t *state, client_t *self, client_t *cl
     }
     char board[PROTO_MAX_LINE];
     game_to_string(g, board, sizeof(board));
-    char out[PROTO_MAX_LINE];
+    char out[PROTO_MAX_LINE + 3];
     snprintf(out, sizeof(out), "\n%s\n", board);
     safe_send(self->fd, out);
     return 0;
@@ -928,6 +928,7 @@ static int handle_list_friends(server_state_t *state, client_t *self, client_t *
 static int handle_list_games(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
     (void)clients;
+    (void)args;
     if (!state || !self) return -1;
     char *requester = NULL;
     if (self->name[0] != '\0')
