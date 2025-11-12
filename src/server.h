@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "game.h"
 #include "client.h"
+#include "persist.h"
 
 // Maximums for the server in-memory tables
 #define SERVER_MAX_USERS 128

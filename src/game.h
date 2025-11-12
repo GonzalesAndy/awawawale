@@ -76,12 +76,6 @@ void game_print(const game_t *g);
 // Check whether game is over.
 bool game_is_over(const game_t *g);
 
-// Save a game's record to a persistent storage (append). Returns 0 on success.
-int game_save_record(const game_t *g, const char *path);
-
-// Load a previously saved game record from path into g. Returns 0 on success.
-int game_load_record(game_t *g, const char *path);
-
 // Helpers to manage observers and private spectator lists
 int game_add_observer(game_t *g, const char *username);
 int game_remove_observer(game_t *g, const char *username);

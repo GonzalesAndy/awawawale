@@ -96,6 +96,12 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
             printf("Usage: register <name>\n");
             return false;
         }
+        // not allow name with spaces
+        if (strchr(name, ' '))
+        {
+            printf("Username cannot contain spaces.\n");
+            return false;
+        }
         if (username && username[0] != '\0')
         {
             printf("You are already registered as '%s'. Disconnect or restart to change username.\n", username);

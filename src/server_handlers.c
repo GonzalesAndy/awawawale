@@ -405,7 +405,7 @@ static int handle_get_replay(server_state_t *state, client_t *self, client_t *cl
     snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
     safe_send(self->fd, msg);
     
-    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | QUIT\n> ");
+    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | EXIT\n");
     
     return 0;
 }
