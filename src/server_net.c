@@ -19,6 +19,10 @@ static void client_init(client_t *c)
     c->buf_len = 0;
     c->buf[0] = '\0';
     c->focused_game_id = 0;
+    c->observed_game_id = 0;
+    c->in_replay_mode = false;
+    c->replay_gid = 0;
+    c->replay_current_move = -1;
 }
 
 static int create_and_bind(int port)

@@ -27,6 +27,10 @@
 #define CMD_SET_PRIVATE "SET_PRIVATE"
 #define CMD_ALLOW_SPECTATOR "ALLOW_SPECTATOR"
 #define CMD_DISALLOW_SPECTATOR "DISALLOW_SPECTATOR"
+#define CMD_GET_REPLAY "GET_REPLAY"
+#define CMD_REPLAY_NEXT "NEXT"
+#define CMD_REPLAY_PREV "PREVIOUS"
+#define CMD_REPLAY_EXIT "EXIT"
 
 // Friend management commands
 #define CMD_FRIEND_ADD "FRIEND_ADD"
@@ -56,6 +60,7 @@ char *proto_build_group_quit(char *dest, size_t n, const char *group_name, const
 char *proto_build_register(char *dest, size_t n, const char *name);
 char *proto_build_game_update(char *dest, size_t n, uint64_t game_id, const char *board_text);
 char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_id);
+char *proto_build_get_replay(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_stop_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_bio_set(char *dest, size_t n, const char *from, const char *bio_text);
 char *proto_build_bio_show(char *dest, size_t n, const char *requester, const char *target_username);

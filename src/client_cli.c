@@ -34,8 +34,9 @@ void client_cli_print_help(void)
     printf("  stop_observe           - stop spectating any game\n");
     printf("  move <pit|game pit>   - play a move in focused game or specific game\n");
     printf("  show_board [game-id]  - show board for focused game or specific id\n");
+    printf("  get_replay <game-id>  - view replay of a finished game\n");
     printf("  help                  - show this help\n");
-    printf("  quit                  - exit\n\n\n");
+    printf("  quit                  - quit client\n\n\n");
 }
 
 void client_cli_print_prompt(const char *username, unsigned long focused_game_id)
@@ -385,6 +386,29 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
         if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
         char *gid = strtok(NULL, " \n");
         proto_build_show_board(out, PROTO_MAX_LINE, username, gid ? strtoull(gid, NULL, 10) : 0);
+        return true;
+    }
+    else if (strcmp(cmd, "get_replay") == 0)
+    {
+        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        char *gid = strtok(NULL, " \n");
+        if (!gid) { printf("Usage: get_replay <game-id>\n"); return false; }
+        proto_build_get_replay(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
+        return true;
+    }
+    else if (strcmp(cmd, "next") == 0)
+    {
+        snprintf(out, PROTO_MAX_LINE, "NEXT\n");
+        return true;
+    }
+    else if (strcmp(cmd, "previous") == 0)
+    {
+        snprintf(out, PROTO_MAX_LINE, "PREVIOUS\n");
+        return true;
+    }
+    else if (strcmp(cmd, "exit") == 0 || strcmp(cmd, "EXIT") == 0)
+    {
+        snprintf(out, PROTO_MAX_LINE, "EXIT\n");
         return true;
     }
 

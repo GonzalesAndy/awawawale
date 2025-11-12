@@ -8,9 +8,11 @@
 
 static void safe_send(int fd, const char *s)
 {
-    if (fd < 0 || !s)
-        return;
-    send(fd, s, strlen(s), 0);
+    if (fd < 0 || !s) return;
+    size_t len = strlen(s), sent = 0;
+    ssize_t n;
+    while (sent < len && (n = send(fd, s + sent, len - sent, 0)) > 0)
+        sent += n;
 }
 
 static const char *parse_cmd(char *line, char **args)
@@ -317,7 +319,6 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
     }
     if (g->state == GAME_STATE_FINISHED)
     {
-        // TODO : test endgame condition
         char out[PROTO_MAX_LINE];
         if (g->score[0] > g->score[1])
         {
@@ -341,9 +342,209 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
             }
         }
 
-        // TODO : persist_append_game(g, "games.log");
+        // Persist finished game to replays/g-<id>.rec
+        char replay_dir[256] = "replays";
+        char replay_path[512];
+        snprintf(replay_path, sizeof(replay_path), "%s/g-%lu.rec", replay_dir, (unsigned long)g->id);
+        {
+            char cmd[512];
+            snprintf(cmd, sizeof(cmd), "mkdir -p %s", replay_dir);
+            system(cmd);
+        }
+        game_save_record(g, replay_path);
         server_remove_game(state, g->id);
     }
+    return 0;
+}
+
+static int handle_get_replay(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)state; (void)clients;
+    if (!self || !args) return -1;
+    char *requester = strtok(args, " ");
+    char *gid_s = strtok(NULL, " \n");
+    if (!requester || !gid_s) return -1;
+    uint64_t gid = strtoull(gid_s, NULL, 10);
+    if (gid == 0) return -1;
+    
+    char replay_path[512];
+    snprintf(replay_path, sizeof(replay_path), "replays/g-%lu.rec", (unsigned long)gid);
+    
+    // Load the game record
+    game_t loaded_game;
+    if (game_load_record(&loaded_game, replay_path) != 0) {
+        safe_send(self->fd, "ERROR replay not found\n");
+        return -1;
+    }
+    
+    // Enter replay mode
+    self->in_replay_mode = true;
+    self->replay_gid = gid;
+    self->replay_current_move = -1; // Start at initial state
+    
+    // Send initial message
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
+    char header[PROTO_MAX_LINE];
+    snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)gid);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Final Score: %d - %d\n", loaded_game.score[0], loaded_game.score[1]);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Total moves: %d\n\n", loaded_game.moves_len);
+    safe_send(self->fd, header);
+    
+    // Show initial board state
+    game_t initial_game;
+    game_init(&initial_game, loaded_game.player_name[0], loaded_game.player_name[1]);
+    initial_game.id = loaded_game.id;
+    
+    char board[PROTO_MAX_LINE];
+    game_to_string(&initial_game, board, sizeof(board));
+    char msg[PROTO_MAX_LINE];
+    snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
+    safe_send(self->fd, msg);
+    
+    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | QUIT\n> ");
+    
+    return 0;
+}
+
+static int handle_replay_next(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)state; (void)clients; (void)args;
+    if (!self || !self->in_replay_mode) return -1;
+    
+    char replay_path[512];
+    snprintf(replay_path, sizeof(replay_path), "replays/g-%lu.rec", (unsigned long)self->replay_gid);
+    
+    game_t loaded_game;
+    if (game_load_record(&loaded_game, replay_path) != 0) {
+        safe_send(self->fd, "ERROR loading replay\n");
+        self->in_replay_mode = false;
+        return -1;
+    }
+    
+    // Check if we can advance
+    if (self->replay_current_move >= loaded_game.moves_len - 1) {
+        safe_send(self->fd, "Already at the last move\n> ");
+        return 0;
+    }
+    
+    // Advance to next move
+    self->replay_current_move++;
+    
+    // Reconstruct game state up to current move
+    game_t replay_game;
+    game_init(&replay_game, loaded_game.player_name[0], loaded_game.player_name[1]);
+    replay_game.id = loaded_game.id;
+    
+    for (int i = 0; i <= self->replay_current_move; ++i) {
+        game_make_move(&replay_game, loaded_game.moves[i].player, loaded_game.moves[i].pit_index);
+    }
+    
+    // Clear screen and display
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen
+    char header[PROTO_MAX_LINE];
+    snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)self->replay_gid);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
+    safe_send(self->fd, header);
+    
+    char board[PROTO_MAX_LINE];
+    game_to_string(&replay_game, board, sizeof(board));
+    char msg[PROTO_MAX_LINE];
+    const char *player_name = loaded_game.moves[self->replay_current_move].player == PLAYER_A ? 
+                              loaded_game.player_name[0] : loaded_game.player_name[1];
+    snprintf(msg, sizeof(msg), "Move %d/%d: %s played pit %d\n%s\n", 
+             self->replay_current_move + 1, loaded_game.moves_len,
+             player_name, loaded_game.moves[self->replay_current_move].pit_index,
+             board);
+    safe_send(self->fd, msg);
+    
+    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | QUIT\n> ");
+    
+    return 0;
+}
+
+static int handle_replay_prev(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)state; (void)clients; (void)args;
+    if (!self || !self->in_replay_mode) return -1;
+    
+    char replay_path[512];
+    snprintf(replay_path, sizeof(replay_path), "replays/g-%lu.rec", (unsigned long)self->replay_gid);
+    
+    game_t loaded_game;
+    if (game_load_record(&loaded_game, replay_path) != 0) {
+        safe_send(self->fd, "ERROR loading replay\n");
+        self->in_replay_mode = false;
+        return -1;
+    }
+    
+    // Check if we can go back
+    if (self->replay_current_move < 0) {
+        safe_send(self->fd, "Already at the initial state\n> ");
+        return 0;
+    }
+    
+    // Go back one move
+    self->replay_current_move--;
+    
+    // Clear screen
+    safe_send(self->fd, "\033[2J\033[H");
+    char header[PROTO_MAX_LINE];
+    snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)self->replay_gid);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
+    safe_send(self->fd, header);
+    
+    // Reconstruct game state
+    game_t replay_game;
+    game_init(&replay_game, loaded_game.player_name[0], loaded_game.player_name[1]);
+    replay_game.id = loaded_game.id;
+    
+    if (self->replay_current_move >= 0) {
+        for (int i = 0; i <= self->replay_current_move; ++i) {
+            game_make_move(&replay_game, loaded_game.moves[i].player, loaded_game.moves[i].pit_index);
+        }
+        
+        char board[PROTO_MAX_LINE];
+        game_to_string(&replay_game, board, sizeof(board));
+        char msg[PROTO_MAX_LINE];
+        const char *player_name = loaded_game.moves[self->replay_current_move].player == PLAYER_A ? 
+                                  loaded_game.player_name[0] : loaded_game.player_name[1];
+        snprintf(msg, sizeof(msg), "Move %d/%d: %s played pit %d\n%s\n", 
+                 self->replay_current_move + 1, loaded_game.moves_len,
+                 player_name, loaded_game.moves[self->replay_current_move].pit_index,
+                 board);
+        safe_send(self->fd, msg);
+    } else {
+        // Show initial state
+        char board[PROTO_MAX_LINE];
+        game_to_string(&replay_game, board, sizeof(board));
+        char msg[PROTO_MAX_LINE];
+        snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
+        safe_send(self->fd, msg);
+    }
+    
+    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | QUIT\n> ");
+    
+    return 0;
+}
+
+static int handle_replay_exit(server_state_t *state, client_t *self, client_t *clients, char *args)
+{
+    (void)state; (void)clients; (void)args;
+    if (!self || !self->in_replay_mode) return -1;
+    
+    self->in_replay_mode = false;
+    self->replay_gid = 0;
+    self->replay_current_move = -1;
+    
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen
+    safe_send(self->fd, "Exited replay mode\n");
+    
     return 0;
 }
 
@@ -811,6 +1012,15 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     char *args = NULL;
     const char *cmd = parse_cmd(line, &args);
 
+    // If in replay mode, only allow replay commands
+    if (self->in_replay_mode) {
+        if (strcmp(cmd, CMD_REPLAY_NEXT) == 0) return handle_replay_next(state, self, clients, args);
+        if (strcmp(cmd, CMD_REPLAY_PREV) == 0) return handle_replay_prev(state, self, clients, args);
+        if (strcmp(cmd, CMD_REPLAY_EXIT) == 0) return handle_replay_exit(state, self, clients, args);
+        safe_send(self->fd, "In replay mode. Use: next | previous | exit\n");
+        return 0;
+    }
+
     if (strcmp(cmd, CMD_REGISTER) == 0) return handle_register(state, self, clients, args);
     if (strcmp(cmd, CMD_BIO) == 0) return handle_bio(state, self, clients, args);
     if (strcmp(cmd, CMD_BIO_SHOW) == 0) return handle_bio_show(state, self, clients, args);
@@ -833,6 +1043,7 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, clients, args);
     if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, clients, args);
     if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, clients, args);
+    if (strcmp(cmd, CMD_GET_REPLAY) == 0) return handle_get_replay(state, self, clients, args);
 
     char resp[PROTO_MAX_LINE];
     snprintf(resp, sizeof(resp), "ECHO %s\n", line_in);
