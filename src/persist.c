@@ -4,8 +4,7 @@
 #include <stdlib.h>
 
 /*
- * Save a finished game's minimal record to a simple text format.
- * Format (line-based):
+ * Format :
  * version:1
  * id:<uint64>
  * player_a:<name>
@@ -15,14 +14,14 @@
  * moves_len:<n>
  * then n lines: <player_index> <pit_index>
  *
- * Only allowed when game state is GAME_STATE_FINISHED (per request).
+ * Only allowed when game is finished.
  */
 int game_save_record(const game_t *g, const char *path)
 {
     if (!g || !path)
         return -1;
     if (g->state != GAME_STATE_FINISHED)
-        return -1; /* only export finished games */
+        return -1;
 
     char tmp_path[512];
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
@@ -48,7 +47,6 @@ int game_save_record(const game_t *g, const char *path)
         return -1;
     }
 
-    /* atomic replace */
     if (rename(tmp_path, path) != 0) {
         remove(tmp_path);
         return -1;
@@ -58,10 +56,8 @@ int game_save_record(const game_t *g, const char *path)
 }
 
 /*
- * Load a saved game record written by game_save_record into g.
- * The function will initialize a temporary game and replay moves to
- * reconstruct the final board, then populate `g` fields and the moves
- * history. Returns 0 on success.
+ * Initialize a game instance from a recorded file.
+ * Returns 0 on success, -1 on failure.
  */
 int game_load_record(game_t *g, const char *path)
 {
@@ -85,7 +81,7 @@ int game_load_record(game_t *g, const char *path)
             id = (unsigned long long)strtoull(line + 3, NULL, 10);
         } else if (strncmp(line, "player_a:", 9) == 0) {
             strncpy(player_a, line + 9, GAME_MAX_USERNAME - 1);
-            /* strip newline */ player_a[strcspn(player_a, "\r\n")] = '\0';
+            player_a[strcspn(player_a, "\r\n")] = '\0';
         } else if (strncmp(line, "player_b:", 9) == 0) {
             strncpy(player_b, line + 9, GAME_MAX_USERNAME - 1);
             player_b[strcspn(player_b, "\r\n")] = '\0';
@@ -120,20 +116,18 @@ int game_load_record(game_t *g, const char *path)
 
     if (idx != moves_len) return -1;
 
-    /* Reconstruct final board by replaying moves on a fresh game */
+    /* Ensures the game is reconstructed correctly */
     game_t tmp;
     game_init(&tmp, player_a[0] ? player_a : NULL, player_b[0] ? player_b : NULL);
     tmp.id = id;
-    tmp.moves_len = 0; /* game_make_move will populate tmp.moves; we don't care */
+    tmp.moves_len = 0;
 
     for (int i = 0; i < moves_len; ++i) {
         game_make_move(&tmp, parsed_moves[i].player, parsed_moves[i].pit_index);
     }
 
-    /* copy reconstructed state into g */
     *g = tmp; /* struct copy */
 
-    /* overwrite moves array with the parsed moves so history matches file */
     g->moves_len = moves_len;
     for (int i = 0; i < moves_len; ++i)
         g->moves[i] = parsed_moves[i];

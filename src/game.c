@@ -16,8 +16,6 @@ void game_init(game_t *g, const char *player_a_name, const char *player_b_name) 
     g->state = GAME_STATE_NEW;
     g->moves_len = 0;
     g->private_mode = false;
-    g->allowed_spectators_count = 0;
-    for (int i = 0; i < GAME_MAX_OBSERVERS; ++i) g->allowed_spectators[i][0] = '\0';
     g->player_name[0][0] = '\0';
     g->player_name[1][0] = '\0';
 
@@ -94,7 +92,6 @@ bool game_make_move(game_t *g, player_t p, int pit_index)
     return true;
 }
 
-/* Minimal helper implementations */
 bool game_is_move_legal(const game_t *g, player_t p, int pit_index) {
     if (!g) return false;
     if (p != g->turn) return false;

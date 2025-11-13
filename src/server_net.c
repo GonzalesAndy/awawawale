@@ -95,8 +95,8 @@ static void server_handle_client_data(client_t *c, client_t *clients, server_sta
     }
     tmp[r] = '\0';
 
-    if (c->buf_len + (size_t)r >= sizeof(c->buf) - 1)
-        c->buf_len = 0; // overflow: reset buffer
+    if (c->buf_len + (size_t)r >= sizeof(c->buf) - 1) // truncate if overflow
+        c->buf_len = 0;
     memcpy(c->buf + c->buf_len, tmp, r);
     c->buf_len += (size_t)r;
     c->buf[c->buf_len] = '\0';
@@ -141,7 +141,7 @@ int server_run(int port)
     while (1)
     {
         FD_ZERO(&readset);
-        FD_SET(listen_fd, &readset);
+        FD_SET(listen_fd, &readset); // monitor new connections
         int maxfd = listen_fd;
         for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
         {
@@ -152,7 +152,7 @@ int server_run(int port)
                     maxfd = clients[i].fd;
             }
         }
-        int rv = select(maxfd + 1, &readset, NULL, NULL, NULL);
+        int rv = select(maxfd + 1, &readset, NULL, NULL, NULL); // check for activity
         if (rv < 0)
         {
             if (errno == EINTR)
@@ -160,10 +160,10 @@ int server_run(int port)
             perror("select");
             break;
         }
-        if (FD_ISSET(listen_fd, &readset))
+        if (FD_ISSET(listen_fd, &readset)) // new connection
             server_accept_new(listen_fd, clients, SERVER_NET_MAX_CLIENTS);
         for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
-            if (clients[i].fd != -1 && FD_ISSET(clients[i].fd, &readset))
+            if (clients[i].fd != -1 && FD_ISSET(clients[i].fd, &readset)) // data from connected client
                 server_handle_client_data(&clients[i], clients, &state);
     }
 

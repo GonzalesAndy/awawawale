@@ -54,9 +54,11 @@ int client_run(void)
             ssize_t n = recv(sockfd, buf, sizeof(buf) - 1, 0);
             if (n <= 0)
             {
-                if (n == 0)
+                if (n == 0) {
                     printf("\nServer closed connection\n");
-                else
+                    focused_game_id = 0;
+                    username[0] = '\0';
+                } else
                     perror("recv");
                 close(sockfd);
                 sockfd = -1;
@@ -111,7 +113,7 @@ int client_run(void)
 
             if (strlen(line) == 0)
             {
-                printf("\x1b[1A\x1b[2K");
+                printf("\x1b[1A\x1b[2K"); // move cursor up and clear line
                 reprint_prompt(username, focused_game_id);
                 continue;
             }

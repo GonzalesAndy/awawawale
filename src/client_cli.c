@@ -55,8 +55,6 @@ void client_cli_print_prompt(const char *username, unsigned long focused_game_id
     fflush(stdout);
 }
 
-// networking is implemented in client_io; no direct connect helper here
-
 bool client_cli_handle_input(const char *username, const char *line_in, char *out, int *sockfd)
 {
     char tmp[PROTO_MAX_LINE];
@@ -144,7 +142,7 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
         }
         else
         {
-            // single-line bio provided; use as-is
+            // single-line bio provided
             strncpy(assembled, bio_text, sizeof(assembled) - 1);
             assembled[sizeof(assembled) - 1] = '\0';
         }
@@ -153,7 +151,6 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
             printf("You must register a username first.\n");
             return false;
         }
-        // assembled contains literal newlines encoded as "\\n" sequences
         proto_build_bio_set(out, PROTO_MAX_LINE, username, assembled);
         return true;
     }

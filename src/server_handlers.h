@@ -4,7 +4,7 @@
 #include "server_net.h"
 #include "server.h"
 
-// Dispatch a single parsed command line (null-terminated, without trailing \n)
+// Dispatch a parsed command line to the appropriate handler
 // Returns 0 on success, negative on error
 int server_dispatch_command(server_state_t *state, client_t *self, client_t *clients, const char *line);
 

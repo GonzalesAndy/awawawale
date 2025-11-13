@@ -15,14 +15,14 @@
 #define SERVER_MAX_GROUPS 64
 #define SERVER_MAX_GROUP_MEMBERS 32
 
-// Challenge record for pending invitations
+// pending game invitations
 typedef struct {
 	char from[GAME_MAX_USERNAME];
 	char to[GAME_MAX_USERNAME];
 	bool active;
 } challenge_t;
 
-// Group chat record
+// group chat instance
 typedef struct {
 	char name[GAME_MAX_USERNAME];
 	char owner[GAME_MAX_USERNAME];
@@ -31,9 +31,7 @@ typedef struct {
 	bool active;
 } group_t;
 
-// Server's main runtime state (in-memory). The server will maintain
-// registries of users, active games, challenges, and chat logs. This is
-// the central structure modified by server implementation code.
+// Server's main state structure
 typedef struct {
 	user_profile_t users[SERVER_MAX_USERS];
 	int users_count;
@@ -48,11 +46,10 @@ typedef struct {
 	group_t groups[SERVER_MAX_GROUPS];
 	int groups_count;
 
-	// Simple next ids generator for games
 	uint64_t next_game_id;
 } server_state_t;
 
-// Server API prototypes (implementations elsewhere)
+// Initialization and user management
 int server_init(server_state_t *s);
 int server_register_user(server_state_t *s, const char *username, int sockfd);
 int server_unregister_user(server_state_t *s, const char *username);

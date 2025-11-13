@@ -47,10 +47,10 @@ int server_register_user(server_state_t *s, const char *username, int sockfd)
             first_empty = i;
         }
     }
+    // Register new user
     if (first_empty != -1)
     {
         user_profile_t *u = &s->users[first_empty];
-        // Clear the entire struct, then fill required fields
         memset(u, 0, sizeof(*u));
         strncpy(u->username, username, GAME_MAX_USERNAME - 1);
         u->username[GAME_MAX_USERNAME - 1] = '\0';
@@ -110,7 +110,7 @@ int server_set_user_bio(server_state_t *s, const char *username, const char *bio
     {
         if (s->users[i].username[0] != '\0' && strcmp(s->users[i].username, username) == 0)
         {
-            // Unescape any literal "\\n" sequences into actual newlines
+            // parse "\\n" into \n
             size_t src_i = 0, dst_i = 0;
             while (bio_text[src_i] != '\0' && dst_i + 1 < CLIENT_MAX_BIO)
             {
@@ -209,7 +209,6 @@ int server_refuse_challenge(server_state_t *s, const char *from, const char *to)
     return server_cancel_challenge(s, from, to);
 }
 
-// Stubs for future game management
 int server_create_game_from_challenge(server_state_t *s, const char *player_a, const char *player_b, uint64_t *out_game_id)
 {
     if (!s || !player_a || !player_b)
@@ -327,7 +326,7 @@ int server_group_quit(server_state_t *s, const char *group_name, const char *use
         if (strcmp(s->groups[gi].members[i], username) == 0)
         {
             s->groups[gi].members[i][0] = '\0';
-            // compact
+            // compact member list
             for (int j = i; j < s->groups[gi].member_count - 1; ++j)
                 strncpy(s->groups[gi].members[j], s->groups[gi].members[j + 1], GAME_MAX_USERNAME);
             s->groups[gi].member_count--;
@@ -344,7 +343,6 @@ int server_group_quit(server_state_t *s, const char *group_name, const char *use
     return -1;
 }
 
-// ---------------------- Friends management ----------------------
 static int find_user_index(server_state_t *s, const char *username)
 {
     if (!s || !username)
@@ -390,8 +388,8 @@ int server_friend_add(server_state_t *s, const char *owner, const char *friend_u
         return -1;
     for (int i = 0; i < up->friends_count; ++i)
         if (strcmp(up->friends[i], friend_username) == 0)
-            return 0; // already friend, idempotent
-    strncpy(up->friends[up->friends_count], friend_username, GAME_MAX_USERNAME - 1);
+            return 0; // already friend
+    strncpy(up->friends[up->friends_count], friend_username, GAME_MAX_USERNAME - 1); // add friend
     up->friends[up->friends_count][GAME_MAX_USERNAME - 1] = '\0';
     up->friends_count++;
     return 0;
@@ -410,9 +408,10 @@ int server_friend_remove(server_state_t *s, const char *owner, const char *frien
         if (strcmp(up->friends[i], friend_username) == 0)
         {
             if (i < up->friends_count - 1)
+                // shift left
                 memmove(up->friends + i, up->friends + i + 1, (size_t)(up->friends_count - i - 1) * sizeof(up->friends[0]));
             up->friends_count--;
-            if (up->friends_count >= 0)
+            if (up->friends_count >= 0) // clear last entry
                 up->friends[up->friends_count][0] = '\0';
             return 0;
         }
@@ -428,7 +427,7 @@ int server_friend_list(server_state_t *s, const char *owner, char dest[][GAME_MA
     if (oi < 0)
         return 0;
     user_profile_t *up = &s->users[oi];
-    int n = up->friends_count < max ? up->friends_count : max;
+    int n = up->friends_count < max ? up->friends_count : max; // min
     for (int i = 0; i < n; ++i)
     {
         strncpy(dest[i], up->friends[i], GAME_MAX_USERNAME - 1);

@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
+// Send a string safely to a TCP socket
 static void safe_send(int fd, const char *s)
 {
     if (fd < 0 || !s) return;
@@ -100,11 +101,8 @@ static int handle_bio_show(server_state_t *state, client_t *self, char *args)
     char biobuf[CLIENT_MAX_BIO];
     if (server_show_user_bio(state, requester, target, biobuf, sizeof(biobuf)) == 0)
     {
-        // Send as a block to preserve newlines
         char resp[PROTO_MAX_LINE];
-        snprintf(resp, sizeof(resp), "BIO_BEGIN %s\n%s\nBIO_END\n", target, biobuf);
-        // Note: snprintf with %s and biobuf will include embedded newlines
-        // but ensure resp buffer size is respected
+        snprintf(resp, sizeof(resp), "%s's Bio : \n%s\n", target, biobuf);
         safe_send(self->fd, resp);
         return 0;
     }
@@ -216,9 +214,8 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
             snprintf(resp, sizeof(resp), "WARNING challenger %s not online\n", challenger);
             safe_send(self->fd, resp);
         }
-        // Also show initial board to both players
         game_t *g = NULL;
-        if (server_get_game(state, gid, &g) == 0 && g)
+        if (server_get_game(state, gid, &g) == 0 && g) // show initial board to both players
         {
             char board[PROTO_MAX_LINE + 3];
             game_to_string(g, board, sizeof(board));
@@ -326,13 +323,14 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         {
             if (clients[i].fd == -1)
                 continue;
-            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0)
+            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0) // TODO also notify spectators?
             {
                 safe_send(clients[i].fd, out);
             }
         }
 
         // Persist finished game to replays/g-<id>.rec
+        // TODO: ensure when i restart server that it won't overwrite existing replays
         char replay_dir[256] = "replays";
         char replay_path[512];
         snprintf(replay_path, sizeof(replay_path), "%s/g-%lu.rec", replay_dir, (unsigned long)g->id);
@@ -398,7 +396,7 @@ static int handle_get_replay(client_t *self, char *args)
     snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
     safe_send(self->fd, msg);
 
-    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | EXIT\n");
+    safe_send(self->fd, "\nCommands: next | previous | exit\n");
 
     return 0;
 }
@@ -419,17 +417,14 @@ static int handle_replay_next(client_t *self)
         return -1;
     }
 
-    // Check if we can advance
-    if (self->replay_current_move >= loaded_game.moves_len - 1)
+    if (self->replay_current_move >= loaded_game.moves_len - 1) // check if we can advance
     {
-        safe_send(self->fd, "Already at the last move\n> ");
+        safe_send(self->fd, "Already at the last move\n");
         return 0;
     }
 
-    // Advance to next move
     self->replay_current_move++;
 
-    // Reconstruct game state up to current move
     game_t replay_game;
     game_init(&replay_game, loaded_game.player_name[0], loaded_game.player_name[1]);
     replay_game.id = loaded_game.id;
@@ -439,8 +434,7 @@ static int handle_replay_next(client_t *self)
         game_make_move(&replay_game, loaded_game.moves[i].player, loaded_game.moves[i].pit_index);
     }
 
-    // Clear screen and display
-    safe_send(self->fd, "\033[2J\033[H"); // Clear screen
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
     char header[PROTO_MAX_LINE];
     snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)self->replay_gid);
     safe_send(self->fd, header);
@@ -457,7 +451,7 @@ static int handle_replay_next(client_t *self)
              board);
     safe_send(self->fd, msg);
 
-    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | QUIT\n> ");
+    safe_send(self->fd, "\nCommands: next | previous | exit\n> ");
 
     return 0;
 }
@@ -478,25 +472,21 @@ static int handle_replay_prev(client_t *self)
         return -1;
     }
 
-    // Check if we can go back
-    if (self->replay_current_move < 0)
+    if (self->replay_current_move < 0) // check if we can go back
     {
-        safe_send(self->fd, "Already at the initial state\n> ");
+        safe_send(self->fd, "Already at the initial state\n");
         return 0;
     }
 
-    // Go back one move
     self->replay_current_move--;
 
-    // Clear screen
-    safe_send(self->fd, "\033[2J\033[H");
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
     char header[PROTO_MAX_LINE];
     snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)self->replay_gid);
     safe_send(self->fd, header);
     snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
     safe_send(self->fd, header);
 
-    // Reconstruct game state
     game_t replay_game;
     game_init(&replay_game, loaded_game.player_name[0], loaded_game.player_name[1]);
     replay_game.id = loaded_game.id;
@@ -528,7 +518,7 @@ static int handle_replay_prev(client_t *self)
         safe_send(self->fd, msg);
     }
 
-    safe_send(self->fd, "\nCommands: NEXT | PREVIOUS | QUIT\n> ");
+    safe_send(self->fd, "\nCommands: next | previous | exit\n");
 
     return 0;
 }
@@ -542,7 +532,7 @@ static int handle_replay_exit(client_t *self)
     self->replay_gid = 0;
     self->replay_current_move = -1;
 
-    safe_send(self->fd, "\033[2J\033[H"); // Clear screen
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
     safe_send(self->fd, "Exited replay mode\n");
 
     return 0;
@@ -664,11 +654,11 @@ static int handle_observe(server_state_t *state, client_t *self, char *args)
         safe_send(self->fd, "ERROR game not found\n");
         return -1;
     }
-    // privacy: allow if not private OR friend of either player
+    // allow if not private OR friend of either player
     int allowed = 0;
     if (!g->private_mode)
         allowed = 1;
-    /* Do NOT allow a player to spectate their own game */
+    /* do NOT allow a player to spectate their own game */
     if (strcmp(g->player_name[0], from) == 0 || strcmp(g->player_name[1], from) == 0)
     {
         safe_send(self->fd, "ERROR cannot spectate your own game\n");
@@ -685,7 +675,7 @@ static int handle_observe(server_state_t *state, client_t *self, char *args)
     // only one observed game at a time
     self->observed_game_id = gid;
 
-    // send initial board with spectating header
+    // send current board state
     char board[PROTO_MAX_LINE];
     game_to_string(g, board, sizeof(board));
     char msg[PROTO_MAX_LINE + 64];
@@ -982,6 +972,8 @@ static int handle_set_private(server_state_t *state, client_t *self, char *args)
     char *flag_s = strtok(NULL, " \n");
     if (!from || !flag_s)
         return -1;
+
+    // determine gid (specified or focused)
     uint64_t gid;
     if (gid_s)
         gid = strtoull(gid_s, NULL, 10);
@@ -999,7 +991,7 @@ static int handle_set_private(server_state_t *state, client_t *self, char *args)
         safe_send(self->fd, "ERROR game not found\n");
         return -1;
     }
-    // Only players in the game may toggle privacy
+    // only players in the game can toggle privacy
     if (strcmp(g->player_name[0], from) != 0 && strcmp(g->player_name[1], from) != 0)
     {
         safe_send(self->fd, "ERROR not a player in this game\n");
