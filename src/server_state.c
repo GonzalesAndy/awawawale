@@ -1,5 +1,10 @@
 #include "server.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 int server_init(server_state_t *s)
 {
@@ -22,6 +27,23 @@ int server_init(server_state_t *s)
     for (int i = 0; i < SERVER_MAX_GROUPS; ++i)
         s->groups[i].active = false;
     s->next_game_id = 1;
+
+    // read persisted next_game_id from file
+    {
+        const char *dir = "replays";
+        if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+            // continue
+        }
+        const char *path = "replays/next_game_id";
+        FILE *f = fopen(path, "r");
+        if (f) {
+            unsigned long long v = 0;
+            if (fscanf(f, "%llu", &v) == 1 && v > 0) {
+                s->next_game_id = (uint64_t)v;
+            }
+            fclose(f);
+        }
+    }
     return 0;
 }
 
@@ -218,6 +240,21 @@ int server_create_game_from_challenge(server_state_t *s, const char *player_a, c
     game_t *g = &s->games[s->games_count];
     game_init(g, player_a, player_b);
     g->id = s->next_game_id++;
+    // Persist next_game_id to file
+    {
+        const char *path = "replays/next_game_id";
+        char tmp[256];
+        snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+        FILE *f = fopen(tmp, "w");
+        if (f) {
+            fprintf(f, "%llu\n", (unsigned long long)s->next_game_id);
+            if (fclose(f) == 0) {
+                rename(tmp, path); // ignore errors
+            } else {
+                remove(tmp);
+            }
+        }
+    }
     if (out_game_id)
         *out_game_id = g->id;
     s->games_count++;
