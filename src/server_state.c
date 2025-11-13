@@ -49,18 +49,19 @@ int server_register_user(server_state_t *s, const char *username, int sockfd)
     }
     if (first_empty != -1)
     {
-           user_profile_t *u = &s->users[first_empty];
-           // Clear the entire struct, then fill required fields
-           memset(u, 0, sizeof(*u));
-           strncpy(u->username, username, GAME_MAX_USERNAME - 1);
-           u->username[GAME_MAX_USERNAME - 1] = '\0';
-           u->socket_fd = sockfd;
-           u->bio[0] = '\0';
-           u->friends_count = 0;
-           for (int j = 0; j < CLIENT_MAX_FRIENDS; ++j) u->friends[j][0] = '\0';
-           u->active_games_count = 0;
-           s->users_count++;
-           return 0;
+        user_profile_t *u = &s->users[first_empty];
+        // Clear the entire struct, then fill required fields
+        memset(u, 0, sizeof(*u));
+        strncpy(u->username, username, GAME_MAX_USERNAME - 1);
+        u->username[GAME_MAX_USERNAME - 1] = '\0';
+        u->socket_fd = sockfd;
+        u->bio[0] = '\0';
+        u->friends_count = 0;
+        for (int j = 0; j < CLIENT_MAX_FRIENDS; ++j)
+            u->friends[j][0] = '\0';
+        u->active_games_count = 0;
+        s->users_count++;
+        return 0;
     }
     return -1;
 }
@@ -73,9 +74,9 @@ int server_unregister_user(server_state_t *s, const char *username)
     {
         if (s->users[i].username[0] != '\0' && strcmp(s->users[i].username, username) == 0)
         {
-                // Reset entire user slot to default empty state
-                memset(&s->users[i], 0, sizeof(s->users[i]));
-                s->users[i].socket_fd = -1;
+            // Reset entire user slot to default empty state
+            memset(&s->users[i], 0, sizeof(s->users[i]));
+            s->users[i].socket_fd = -1;
             if (s->users_count > 0)
                 s->users_count--;
             return 0;
@@ -111,11 +112,15 @@ int server_set_user_bio(server_state_t *s, const char *username, const char *bio
         {
             // Unescape any literal "\\n" sequences into actual newlines
             size_t src_i = 0, dst_i = 0;
-            while (bio_text[src_i] != '\0' && dst_i + 1 < CLIENT_MAX_BIO) {
-                if (bio_text[src_i] == '\\' && bio_text[src_i+1] == 'n') {
+            while (bio_text[src_i] != '\0' && dst_i + 1 < CLIENT_MAX_BIO)
+            {
+                if (bio_text[src_i] == '\\' && bio_text[src_i + 1] == 'n')
+                {
                     s->users[i].bio[dst_i++] = '\n';
                     src_i += 2;
-                } else {
+                }
+                else
+                {
                     s->users[i].bio[dst_i++] = bio_text[src_i++];
                 }
             }
@@ -342,7 +347,8 @@ int server_group_quit(server_state_t *s, const char *group_name, const char *use
 // ---------------------- Friends management ----------------------
 static int find_user_index(server_state_t *s, const char *username)
 {
-    if (!s || !username) return -1;
+    if (!s || !username)
+        return -1;
     int seen_used = 0;
     for (int i = 0; i < SERVER_MAX_USERS; ++i)
     {
@@ -351,7 +357,8 @@ static int find_user_index(server_state_t *s, const char *username)
             ++seen_used;
             if (strcmp(s->users[i].username, username) == 0)
                 return i;
-            if (seen_used >= s->users_count) break;
+            if (seen_used >= s->users_count)
+                break;
         }
     }
     return -1;
@@ -359,36 +366,44 @@ static int find_user_index(server_state_t *s, const char *username)
 
 int server_mark_user_offline(server_state_t *s, const char *username)
 {
-    if (!s || !username) return -1;
+    if (!s || !username)
+        return -1;
     int idx = find_user_index(s, username);
-    if (idx < 0) return -1;
+    if (idx < 0)
+        return -1;
     s->users[idx].socket_fd = -1;
     return 0;
 }
 
 int server_friend_add(server_state_t *s, const char *owner, const char *friend_username)
 {
-    if (!s || !owner || !friend_username) return -1;
-    if (strcmp(owner, friend_username) == 0) return -1;
+    if (!s || !owner || !friend_username)
+        return -1;
+    if (strcmp(owner, friend_username) == 0)
+        return -1;
     int oi = find_user_index(s, owner);
     int fi = find_user_index(s, friend_username);
-    if (oi < 0 || fi < 0) return -1;
+    if (oi < 0 || fi < 0)
+        return -1;
     user_profile_t *up = &s->users[oi];
-    if (up->friends_count >= CLIENT_MAX_FRIENDS) return -1;
+    if (up->friends_count >= CLIENT_MAX_FRIENDS)
+        return -1;
     for (int i = 0; i < up->friends_count; ++i)
         if (strcmp(up->friends[i], friend_username) == 0)
             return 0; // already friend, idempotent
-    strncpy(up->friends[up->friends_count], friend_username, GAME_MAX_USERNAME-1);
-    up->friends[up->friends_count][GAME_MAX_USERNAME-1] = '\0';
+    strncpy(up->friends[up->friends_count], friend_username, GAME_MAX_USERNAME - 1);
+    up->friends[up->friends_count][GAME_MAX_USERNAME - 1] = '\0';
     up->friends_count++;
     return 0;
 }
 
 int server_friend_remove(server_state_t *s, const char *owner, const char *friend_username)
 {
-    if (!s || !owner || !friend_username) return -1;
+    if (!s || !owner || !friend_username)
+        return -1;
     int oi = find_user_index(s, owner);
-    if (oi < 0) return -1;
+    if (oi < 0)
+        return -1;
     user_profile_t *up = &s->users[oi];
     for (int i = 0; i < up->friends_count; ++i)
     {
@@ -407,15 +422,17 @@ int server_friend_remove(server_state_t *s, const char *owner, const char *frien
 
 int server_friend_list(server_state_t *s, const char *owner, char dest[][GAME_MAX_USERNAME], int max)
 {
-    if (!s || !owner || !dest || max <= 0) return 0;
+    if (!s || !owner || !dest || max <= 0)
+        return 0;
     int oi = find_user_index(s, owner);
-    if (oi < 0) return 0;
+    if (oi < 0)
+        return 0;
     user_profile_t *up = &s->users[oi];
     int n = up->friends_count < max ? up->friends_count : max;
     for (int i = 0; i < n; ++i)
     {
-        strncpy(dest[i], up->friends[i], GAME_MAX_USERNAME-1);
-        dest[i][GAME_MAX_USERNAME-1] = '\0';
+        strncpy(dest[i], up->friends[i], GAME_MAX_USERNAME - 1);
+        dest[i][GAME_MAX_USERNAME - 1] = '\0';
     }
     return n;
 }

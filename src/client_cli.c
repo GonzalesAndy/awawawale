@@ -126,18 +126,24 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
             printf("Enter your bio. Up to 10 lines. End with a single '.' on its own line.\n");
             char linebuf[256];
             int lines = 0;
-            while (lines < 10) {
-                if (!fgets(linebuf, sizeof(linebuf), stdin)) break;
+            while (lines < 10)
+            {
+                if (!fgets(linebuf, sizeof(linebuf), stdin))
+                    break;
                 // remove trailing newline
                 size_t L = strlen(linebuf);
-                if (L && linebuf[L-1] == '\n') linebuf[--L] = '\0';
-                if (strcmp(linebuf, ".") == 0) break;
-                if (assembled[0] != '\0') strncat(assembled, "\\n", sizeof(assembled) - strlen(assembled) - 1);
+                if (L && linebuf[L - 1] == '\n')
+                    linebuf[--L] = '\0';
+                if (strcmp(linebuf, ".") == 0)
+                    break;
+                if (assembled[0] != '\0')
+                    strncat(assembled, "\\n", sizeof(assembled) - strlen(assembled) - 1);
                 strncat(assembled, linebuf, sizeof(assembled) - strlen(assembled) - 1);
                 lines++;
             }
         }
-        else {
+        else
+        {
             // single-line bio provided; use as-is
             strncpy(assembled, bio_text, sizeof(assembled) - 1);
             assembled[sizeof(assembled) - 1] = '\0';
@@ -337,68 +343,136 @@ bool client_cli_handle_input(const char *username, const char *line_in, char *ou
     }
     else if (strcmp(cmd, "focus") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         char *gid = strtok(NULL, " \n");
-        if (!gid) { printf("Usage: focus <game-id>\n"); return false; }
+        if (!gid)
+        {
+            printf("Usage: focus <game-id>\n");
+            return false;
+        }
         proto_build_focus(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
         return true;
     }
     else if (strcmp(cmd, "show_games") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         proto_build_show_games(out, PROTO_MAX_LINE, username);
         return true;
     }
     else if (strcmp(cmd, "set_private") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         char *a = strtok(NULL, " \n");
         char *b = strtok(NULL, " \n");
-        uint64_t gid = 0; int flag = -1;
-        if (b) { gid = strtoull(a, NULL, 10); flag = atoi(b); }
-        else if (a) { flag = atoi(a); }
-        else { printf("Usage: set_private <0|1> or set_private <game-id> <0|1>\n"); return false; }
+        uint64_t gid = 0;
+        int flag = -1;
+        if (b)
+        {
+            gid = strtoull(a, NULL, 10);
+            flag = atoi(b);
+        }
+        else if (a)
+        {
+            flag = atoi(a);
+        }
+        else
+        {
+            printf("Usage: set_private <0|1> or set_private <game-id> <0|1>\n");
+            return false;
+        }
         proto_build_set_private(out, PROTO_MAX_LINE, username, gid, flag);
         return true;
     }
-        else if (strcmp(cmd, "observe") == 0)
+    else if (strcmp(cmd, "observe") == 0)
+    {
+        if (username[0] == '\0')
         {
-            if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
-            char *gid = strtok(NULL, " \n");
-            if (!gid) { printf("Usage: observe <game-id>\n"); return false; }
-            proto_build_observe(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
-            return true;
+            printf("You must register a username first.\n");
+            return false;
         }
-        else if (strcmp(cmd, "stop_observe") == 0)
+        char *gid = strtok(NULL, " \n");
+        if (!gid)
         {
-            if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
-            proto_build_stop_observe(out, PROTO_MAX_LINE, username, 0);
-            return true;
+            printf("Usage: observe <game-id>\n");
+            return false;
         }
+        proto_build_observe(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
+        return true;
+    }
+    else if (strcmp(cmd, "stop_observe") == 0)
+    {
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
+        proto_build_stop_observe(out, PROTO_MAX_LINE, username, 0);
+        return true;
+    }
     else if (strcmp(cmd, "move") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         char *a = strtok(NULL, " \n");
         char *b = strtok(NULL, " \n");
-        uint64_t gid = 0; int pit = -1;
-        if (a && b) { gid = strtoull(a, NULL, 10); pit = atoi(b); }
-        else if (a) { pit = atoi(a); }
-        else { printf("Usage: move <pit|game-id pit>\n"); return false; }
+        uint64_t gid = 0;
+        int pit = -1;
+        if (a && b)
+        {
+            gid = strtoull(a, NULL, 10);
+            pit = atoi(b);
+        }
+        else if (a)
+        {
+            pit = atoi(a);
+        }
+        else
+        {
+            printf("Usage: move <pit|game-id pit>\n");
+            return false;
+        }
         proto_build_move(out, PROTO_MAX_LINE, username, gid, pit);
         return true;
     }
     else if (strcmp(cmd, "show_board") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         char *gid = strtok(NULL, " \n");
         proto_build_show_board(out, PROTO_MAX_LINE, username, gid ? strtoull(gid, NULL, 10) : 0);
         return true;
     }
     else if (strcmp(cmd, "get_replay") == 0)
     {
-        if (username[0] == '\0') { printf("You must register a username first.\n"); return false; }
+        if (username[0] == '\0')
+        {
+            printf("You must register a username first.\n");
+            return false;
+        }
         char *gid = strtok(NULL, " \n");
-        if (!gid) { printf("Usage: get_replay <game-id>\n"); return false; }
+        if (!gid)
+        {
+            printf("Usage: get_replay <game-id>\n");
+            return false;
+        }
         proto_build_get_replay(out, PROTO_MAX_LINE, username, strtoull(gid, NULL, 10));
         return true;
     }

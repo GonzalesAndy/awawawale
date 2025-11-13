@@ -13,7 +13,8 @@
 // Representation of a connected/registered user profile kept by the
 // server and shared with clients when needed. This struct only contains
 // metadata; networking behavior is implemented elsewhere.
-typedef struct {
+typedef struct
+{
 	char username[GAME_MAX_USERNAME];
 	int socket_fd; // -1 if not connected (transient)
 
@@ -32,7 +33,8 @@ typedef struct {
 } user_profile_t;
 
 // Client-side message structure for chat and protocol exchange
-typedef struct {
+typedef struct
+{
 	char from[GAME_MAX_USERNAME];
 	char to[GAME_MAX_USERNAME]; // empty for global
 	char text[CLIENT_MAX_MSG];
