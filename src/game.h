@@ -70,16 +70,7 @@ bool game_is_move_legal(const game_t *g, player_t p, int pit_index);
 // The resulting string is NUL terminated. Returns dest on success.
 char *game_to_string(const game_t *g, char *dest, size_t n);
 
-// Print board to stdout (ASCII)
-void game_print(const game_t *g);
-
 // Check whether game is over.
 bool game_is_over(const game_t *g);
-
-// Helpers to manage observers and private spectator lists
-int game_add_observer(game_t *g, const char *username);
-int game_remove_observer(game_t *g, const char *username);
-int game_add_allowed_spectator(game_t *g, const char *username);
-int game_remove_allowed_spectator(game_t *g, const char *username);
 
 #endif // GAME_H

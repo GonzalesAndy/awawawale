@@ -71,13 +71,6 @@ int server_create_game_from_challenge(server_state_t *s, const char *player_a, c
 int server_get_game(server_state_t *s, uint64_t game_id, game_t **out);
 int server_remove_game(server_state_t *s, uint64_t game_id);
 
-// Chat and messaging
-int server_broadcast_message(server_state_t *s, const client_message_t *m);
-int server_send_private_message(server_state_t *s, const client_message_t *m);
-
-// Persistence
-int server_persist_game_record(server_state_t *s, const game_t *g, const char *path);
-
 // Groups management
 int server_group_create(server_state_t *s, const char *owner, const char *group_name);
 int server_group_invite(server_state_t *s, const char *owner, const char *group_name, const char *username);

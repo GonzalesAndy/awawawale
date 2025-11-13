@@ -58,15 +58,12 @@ char *proto_build_group_create(char *dest, size_t n, const char *owner, const ch
 char *proto_build_group_invite(char *dest, size_t n, const char *owner, const char *group_name, const char *username);
 char *proto_build_group_quit(char *dest, size_t n, const char *group_name, const char *username);
 char *proto_build_register(char *dest, size_t n, const char *name);
-char *proto_build_game_update(char *dest, size_t n, uint64_t game_id, const char *board_text);
 char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_get_replay(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_stop_observe(char *dest, size_t n, const char *from, uint64_t game_id);
 char *proto_build_bio_set(char *dest, size_t n, const char *from, const char *bio_text);
 char *proto_build_bio_show(char *dest, size_t n, const char *requester, const char *target_username);
 char *proto_build_set_private(char *dest, size_t n, const char *from, uint64_t game_id, int private_flag);
-char *proto_build_allow_spectator(char *dest, size_t n, const char *from, const char *spectator_username);
-char *proto_build_disallow_spectator(char *dest, size_t n, const char *from, const char *spectator_username);
 
 // Friend management builders
 char *proto_build_friend_add(char *dest, size_t n, const char *owner, const char *friend_username);

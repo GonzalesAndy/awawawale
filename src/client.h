@@ -40,8 +40,4 @@ typedef struct
 	char text[CLIENT_MAX_MSG];
 } client_message_t;
 
-// Minimal client API prototypes (implementations elsewhere)
-int client_send_register(int sockfd, const char *username);
-int client_send_challenge(int sockfd, const char *from, const char *to);
-
 #endif // CLIENT_H

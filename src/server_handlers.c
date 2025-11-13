@@ -43,9 +43,8 @@ static int is_friend_of(server_state_t *state, const char *owner, const char *ca
     return 0;
 }
 
-static int handle_register(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_register(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char uname[GAME_MAX_USERNAME];
@@ -68,10 +67,8 @@ static int handle_register(server_state_t *state, client_t *self, client_t *clie
     return -1;
 }
 
-static int handle_bio(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_bio(server_state_t *state, client_t *self, char *args)
 {
-    (void)self;
-    (void)clients;
     if (!args)
         return -1;
     char *username = strtok(args, " ");
@@ -92,9 +89,8 @@ static int handle_bio(server_state_t *state, client_t *self, client_t *clients, 
     return -1;
 }
 
-static int handle_bio_show(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_bio_show(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *requester = strtok(args, " ");
@@ -118,10 +114,8 @@ static int handle_bio_show(server_state_t *state, client_t *self, client_t *clie
     return -1;
 }
 
-static int handle_list_users(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_list_users(server_state_t *state, client_t *self)
 {
-    (void)args;
-    (void)clients;
     char out[PROTO_MAX_LINE];
     out[0] = '\0';
     strncat(out, CMD_USERS, sizeof(out) - strlen(out) - 1);
@@ -139,7 +133,6 @@ static int handle_list_users(server_state_t *state, client_t *self, client_t *cl
 
 static int handle_challenge(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -181,7 +174,6 @@ static int handle_challenge(server_state_t *state, client_t *self, client_t *cli
 
 static int handle_accept(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self;
     if (!args)
         return -1;
     char *acceptor = strtok(args, " ");
@@ -252,7 +244,6 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
 
 static int handle_move(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -356,10 +347,8 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
     return 0;
 }
 
-static int handle_get_replay(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_get_replay(client_t *self, char *args)
 {
-    (void)state;
-    (void)clients;
     if (!self || !args)
         return -1;
     char *requester = strtok(args, " ");
@@ -414,11 +403,8 @@ static int handle_get_replay(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-static int handle_replay_next(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_replay_next(client_t *self)
 {
-    (void)state;
-    (void)clients;
-    (void)args;
     if (!self || !self->in_replay_mode)
         return -1;
 
@@ -476,11 +462,8 @@ static int handle_replay_next(server_state_t *state, client_t *self, client_t *c
     return 0;
 }
 
-static int handle_replay_prev(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_replay_prev(client_t *self)
 {
-    (void)state;
-    (void)clients;
-    (void)args;
     if (!self || !self->in_replay_mode)
         return -1;
 
@@ -550,11 +533,8 @@ static int handle_replay_prev(server_state_t *state, client_t *self, client_t *c
     return 0;
 }
 
-static int handle_replay_exit(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_replay_exit(client_t *self)
 {
-    (void)state;
-    (void)clients;
-    (void)args;
     if (!self || !self->in_replay_mode)
         return -1;
 
@@ -568,10 +548,8 @@ static int handle_replay_exit(server_state_t *state, client_t *self, client_t *c
     return 0;
 }
 
-static int handle_show_games(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_show_games(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
-    (void)state;
     if (!args)
         return -1;
     char *from = strtok(args, " \n");
@@ -596,10 +574,8 @@ static int handle_show_games(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-static int handle_focus(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_focus(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
-    (void)state;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -637,9 +613,8 @@ static int handle_focus(server_state_t *state, client_t *self, client_t *clients
     return 0;
 }
 
-static int handle_show_board(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_show_board(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -665,9 +640,8 @@ static int handle_show_board(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-static int handle_observe(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_observe(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!state || !args || !self)
         return -1;
     char *from = strtok(args, " ");
@@ -720,11 +694,8 @@ static int handle_observe(server_state_t *state, client_t *self, client_t *clien
     return 0;
 }
 
-static int handle_stop_observe(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_stop_observe(client_t *self)
 {
-    (void)state;
-    (void)clients;
-    (void)args;
     if (!self)
         return -1;
     if (self->observed_game_id == 0)
@@ -741,7 +712,6 @@ static int handle_stop_observe(server_state_t *state, client_t *self, client_t *
 
 static int handle_refuse(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self;
     if (!args)
         return -1;
     char *refuser = strtok(args, " ");
@@ -792,7 +762,6 @@ static int find_client_by_name(client_t *clients, const char *name)
 
 static int handle_chat(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)state;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -847,9 +816,8 @@ static int handle_chat(server_state_t *state, client_t *self, client_t *clients,
     return 0;
 }
 
-static int handle_group_create(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_group_create(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -867,9 +835,8 @@ static int handle_group_create(server_state_t *state, client_t *self, client_t *
     return -1;
 }
 
-static int handle_group_invite(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_group_invite(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -888,9 +855,8 @@ static int handle_group_invite(server_state_t *state, client_t *self, client_t *
     return -1;
 }
 
-static int handle_group_quit(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_group_quit(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *gname = strtok(args, " ");
@@ -908,9 +874,8 @@ static int handle_group_quit(server_state_t *state, client_t *self, client_t *cl
     return -1;
 }
 
-static int handle_friend_add(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_friend_add(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -928,9 +893,8 @@ static int handle_friend_add(server_state_t *state, client_t *self, client_t *cl
     return -1;
 }
 
-static int handle_friend_remove(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_friend_remove(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -948,9 +912,8 @@ static int handle_friend_remove(server_state_t *state, client_t *self, client_t 
     return -1;
 }
 
-static int handle_list_friends(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_list_friends(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " \n");
@@ -971,10 +934,8 @@ static int handle_list_friends(server_state_t *state, client_t *self, client_t *
     return 0;
 }
 
-static int handle_list_games(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_list_games(server_state_t *state, client_t *self)
 {
-    (void)clients;
-    (void)args;
     if (!state || !self)
         return -1;
     char *requester = NULL;
@@ -1012,9 +973,8 @@ static int handle_list_games(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-static int handle_set_private(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_set_private(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!state || !args)
         return -1;
     char *from = strtok(args, " ");
@@ -1065,36 +1025,36 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
 
     // If in replay mode, only allow replay commands
     if (self->in_replay_mode) {
-        if (strcmp(cmd, CMD_REPLAY_NEXT) == 0) return handle_replay_next(state, self, clients, args);
-        if (strcmp(cmd, CMD_REPLAY_PREV) == 0) return handle_replay_prev(state, self, clients, args);
-        if (strcmp(cmd, CMD_REPLAY_EXIT) == 0) return handle_replay_exit(state, self, clients, args);
+        if (strcmp(cmd, CMD_REPLAY_NEXT) == 0) return handle_replay_next(self);
+        if (strcmp(cmd, CMD_REPLAY_PREV) == 0) return handle_replay_prev(self);
+        if (strcmp(cmd, CMD_REPLAY_EXIT) == 0) return handle_replay_exit(self);
         safe_send(self->fd, "In replay mode. Use: next | previous | exit\n");
         return 0;
     }
 
-    if (strcmp(cmd, CMD_REGISTER) == 0) return handle_register(state, self, clients, args);
-    if (strcmp(cmd, CMD_BIO) == 0) return handle_bio(state, self, clients, args);
-    if (strcmp(cmd, CMD_BIO_SHOW) == 0) return handle_bio_show(state, self, clients, args);
-    if (strcmp(cmd, CMD_LIST_USERS) == 0) return handle_list_users(state, self, clients, args);
+    if (strcmp(cmd, CMD_REGISTER) == 0) return handle_register(state, self, args);
+    if (strcmp(cmd, CMD_BIO) == 0) return handle_bio(state, self, args);
+    if (strcmp(cmd, CMD_BIO_SHOW) == 0) return handle_bio_show(state, self, args);
+    if (strcmp(cmd, CMD_LIST_USERS) == 0) return handle_list_users(state, self);
     if (strcmp(cmd, CMD_CHALLENGE) == 0) return handle_challenge(state, self, clients, args);
     if (strcmp(cmd, CMD_ACCEPT) == 0) return handle_accept(state, self, clients, args);
     if (strcmp(cmd, CMD_REFUSE) == 0) return handle_refuse(state, self, clients, args);
     if (strcmp(cmd, CMD_CHAT) == 0) return handle_chat(state, self, clients, args);
-    if (strcmp(cmd, CMD_GROUP_CREATE) == 0) return handle_group_create(state, self, clients, args);
-    if (strcmp(cmd, CMD_GROUP_INVITE) == 0) return handle_group_invite(state, self, clients, args);
-    if (strcmp(cmd, CMD_GROUP_QUIT) == 0) return handle_group_quit(state, self, clients, args);
-    if (strcmp(cmd, CMD_FRIEND_ADD) == 0) return handle_friend_add(state, self, clients, args);
-    if (strcmp(cmd, CMD_FRIEND_REMOVE) == 0) return handle_friend_remove(state, self, clients, args);
-    if (strcmp(cmd, CMD_LIST_FRIENDS) == 0) return handle_list_friends(state, self, clients, args);
+    if (strcmp(cmd, CMD_GROUP_CREATE) == 0) return handle_group_create(state, self, args);
+    if (strcmp(cmd, CMD_GROUP_INVITE) == 0) return handle_group_invite(state, self, args);
+    if (strcmp(cmd, CMD_GROUP_QUIT) == 0) return handle_group_quit(state, self, args);
+    if (strcmp(cmd, CMD_FRIEND_ADD) == 0) return handle_friend_add(state, self, args);
+    if (strcmp(cmd, CMD_FRIEND_REMOVE) == 0) return handle_friend_remove(state, self, args);
+    if (strcmp(cmd, CMD_LIST_FRIENDS) == 0) return handle_list_friends(state, self, args);
     if (strcmp(cmd, CMD_MOVE) == 0) return handle_move(state, self, clients, args);
-    if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, clients, args);
-    if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self, clients, args);
-    if (strcmp(cmd, CMD_OBSERVE) == 0) return handle_observe(state, self, clients, args);
-    if (strcmp(cmd, CMD_STOP_OBSERVE) == 0) return handle_stop_observe(state, self, clients, args);
-    if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, clients, args);
-    if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, clients, args);
-    if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, clients, args);
-    if (strcmp(cmd, CMD_GET_REPLAY) == 0) return handle_get_replay(state, self, clients, args);
+    if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, args);
+    if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self);
+    if (strcmp(cmd, CMD_OBSERVE) == 0) return handle_observe(state, self, args);
+    if (strcmp(cmd, CMD_STOP_OBSERVE) == 0) return handle_stop_observe(self);
+    if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, args);
+    if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, args);
+    if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, args);
+    if (strcmp(cmd, CMD_GET_REPLAY) == 0) return handle_get_replay(self, args);
 
     char resp[PROTO_MAX_LINE];
     snprintf(resp, sizeof(resp), "ECHO %s\n", line_in);
