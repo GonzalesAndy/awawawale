@@ -323,14 +323,13 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         {
             if (clients[i].fd == -1)
                 continue;
-            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0) // TODO also notify spectators?
+            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0)
             {
                 safe_send(clients[i].fd, out);
             }
         }
 
         // Persist finished game to replays/g-<id>.rec
-        // TODO: ensure when i restart server that it won't overwrite existing replays
         char replay_dir[256] = "replays";
         char replay_path[512];
         snprintf(replay_path, sizeof(replay_path), "%s/g-%lu.rec", replay_dir, (unsigned long)g->id);
