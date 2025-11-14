@@ -451,7 +451,7 @@ static int handle_replay_next(client_t *self)
              board);
     safe_send(self->fd, msg);
 
-    safe_send(self->fd, "\nCommands: next | previous | exit\n> ");
+    safe_send(self->fd, "\nCommands: next | previous | exit\n");
 
     return 0;
 }
