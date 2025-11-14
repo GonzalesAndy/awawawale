@@ -132,6 +132,12 @@ char *proto_build_observe(char *dest, size_t n, const char *from, uint64_t game_
     return dest;
 }
 
+char *proto_build_get_replay(char *dest, size_t n, const char *from, uint64_t game_id) {
+    if (!dest || !from) return NULL;
+    snprintf(dest, n, "%s %s %lu\n", CMD_GET_REPLAY, from, (unsigned long)game_id);
+    return dest;
+}
+
 char *proto_build_stop_observe(char *dest, size_t n, const char *from, uint64_t game_id) {
     if (!dest || !from) return NULL;
     snprintf(dest, n, "%s %s %lu\n", CMD_STOP_OBSERVE, from, (unsigned long)game_id);

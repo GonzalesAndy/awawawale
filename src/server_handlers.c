@@ -6,11 +6,14 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
+// Send a string safely to a TCP socket
 static void safe_send(int fd, const char *s)
 {
-    if (fd < 0 || !s)
-        return;
-    send(fd, s, strlen(s), 0);
+    if (fd < 0 || !s) return;
+    size_t len = strlen(s), sent = 0;
+    ssize_t n;
+    while (sent < len && (n = send(fd, s + sent, len - sent, 0)) > 0)
+        sent += n;
 }
 
 static const char *parse_cmd(char *line, char **args)
@@ -41,9 +44,8 @@ static int is_friend_of(server_state_t *state, const char *owner, const char *ca
     return 0;
 }
 
-static int handle_register(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_register(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char uname[GAME_MAX_USERNAME];
@@ -66,10 +68,8 @@ static int handle_register(server_state_t *state, client_t *self, client_t *clie
     return -1;
 }
 
-static int handle_bio(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_bio(server_state_t *state, client_t *self, char *args)
 {
-    (void)self;
-    (void)clients;
     if (!args)
         return -1;
     char *username = strtok(args, " ");
@@ -90,9 +90,8 @@ static int handle_bio(server_state_t *state, client_t *self, client_t *clients, 
     return -1;
 }
 
-static int handle_bio_show(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_bio_show(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *requester = strtok(args, " ");
@@ -102,11 +101,8 @@ static int handle_bio_show(server_state_t *state, client_t *self, client_t *clie
     char biobuf[CLIENT_MAX_BIO];
     if (server_show_user_bio(state, requester, target, biobuf, sizeof(biobuf)) == 0)
     {
-        // Send as a block to preserve newlines
-    char resp[PROTO_MAX_LINE];
-    snprintf(resp, sizeof(resp), "BIO_BEGIN %s\n%s\nBIO_END\n", target, biobuf);
-        // Note: snprintf with %s and biobuf will include embedded newlines
-        // but ensure resp buffer size is respected
+        char resp[PROTO_MAX_LINE];
+        snprintf(resp, sizeof(resp), "%s's Bio : \n%s\n", target, biobuf);
         safe_send(self->fd, resp);
         return 0;
     }
@@ -116,10 +112,8 @@ static int handle_bio_show(server_state_t *state, client_t *self, client_t *clie
     return -1;
 }
 
-static int handle_list_users(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_list_users(server_state_t *state, client_t *self)
 {
-    (void)args;
-    (void)clients;
     char out[PROTO_MAX_LINE];
     out[0] = '\0';
     strncat(out, CMD_USERS, sizeof(out) - strlen(out) - 1);
@@ -135,10 +129,8 @@ static int handle_list_users(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-// TODO : Maybe do not permit sending a challenge if u already have a running game with him
 static int handle_challenge(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -180,7 +172,6 @@ static int handle_challenge(server_state_t *state, client_t *self, client_t *cli
 
 static int handle_accept(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self;
     if (!args)
         return -1;
     char *acceptor = strtok(args, " ");
@@ -223,13 +214,12 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
             snprintf(resp, sizeof(resp), "WARNING challenger %s not online\n", challenger);
             safe_send(self->fd, resp);
         }
-        // Also show initial board to both players
         game_t *g = NULL;
-        if (server_get_game(state, gid, &g) == 0 && g)
+        if (server_get_game(state, gid, &g) == 0 && g) // show initial board to both players
         {
-            char board[PROTO_MAX_LINE];
+            char board[PROTO_MAX_LINE + 3];
             game_to_string(g, board, sizeof(board));
-            char init_msg[PROTO_MAX_LINE];
+            char init_msg[PROTO_MAX_LINE + 30];
             snprintf(init_msg, sizeof(init_msg), "\n%s\n", board);
             for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
             {
@@ -251,7 +241,6 @@ static int handle_accept(server_state_t *state, client_t *self, client_t *client
 
 static int handle_move(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -295,10 +284,10 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         return -1;
     }
 
-    char board[PROTO_MAX_LINE];
+    char board[PROTO_MAX_LINE + 3];
     game_to_string(g, board, sizeof(board));
 
-    char msg[PROTO_MAX_LINE];
+    char msg[PROTO_MAX_LINE + 100];
     snprintf(msg, sizeof(msg), "\n%s\n", board);
     for (int i = 0; i < SERVER_NET_MAX_CLIENTS; ++i)
     {
@@ -310,14 +299,13 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         }
         else if (clients[i].observed_game_id == g->id)
         {
-            char obs_msg[PROTO_MAX_LINE + 64];
+            char obs_msg[PROTO_MAX_LINE + 150];
             snprintf(obs_msg, sizeof(obs_msg), "[SPECTATING g-%lu]\n%s", (unsigned long)g->id, msg);
             safe_send(clients[i].fd, obs_msg);
         }
     }
     if (g->state == GAME_STATE_FINISHED)
     {
-        // TODO : test endgame condition
         char out[PROTO_MAX_LINE];
         if (g->score[0] > g->score[1])
         {
@@ -335,22 +323,223 @@ static int handle_move(server_state_t *state, client_t *self, client_t *clients,
         {
             if (clients[i].fd == -1)
                 continue;
-            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0)
+            if (strcmp(clients[i].name, g->player_name[0]) == 0 || strcmp(clients[i].name, g->player_name[1]) == 0) // TODO also notify spectators?
             {
                 safe_send(clients[i].fd, out);
             }
         }
 
-        // TODO : persist_append_game(g, "games.log");
+        // Persist finished game to replays/g-<id>.rec
+        // TODO: ensure when i restart server that it won't overwrite existing replays
+        char replay_dir[256] = "replays";
+        char replay_path[512];
+        snprintf(replay_path, sizeof(replay_path), "%s/g-%lu.rec", replay_dir, (unsigned long)g->id);
+        {
+            char cmd[512];
+            snprintf(cmd, sizeof(cmd), "mkdir -p %s", replay_dir);
+            system(cmd);
+        }
+        game_save_record(g, replay_path);
         server_remove_game(state, g->id);
     }
     return 0;
 }
 
-static int handle_show_games(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_get_replay(client_t *self, char *args)
 {
-    (void)clients;
-    (void)state;
+    if (!self || !args)
+        return -1;
+    char *requester = strtok(args, " ");
+    char *gid_s = strtok(NULL, " \n");
+    if (!requester || !gid_s)
+        return -1;
+    uint64_t gid = strtoull(gid_s, NULL, 10);
+    if (gid == 0)
+        return -1;
+
+    char replay_path[512];
+    snprintf(replay_path, sizeof(replay_path), "replays/g-%lu.rec", (unsigned long)gid);
+
+    // Load the game record
+    game_t loaded_game;
+    if (game_load_record(&loaded_game, replay_path) != 0)
+    {
+        safe_send(self->fd, "ERROR replay not found\n");
+        return -1;
+    }
+
+    // Enter replay mode
+    self->in_replay_mode = true;
+    self->replay_gid = gid;
+    self->replay_current_move = -1; // Start at initial state
+
+    // Send initial message
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
+    char header[PROTO_MAX_LINE];
+    snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)gid);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Final Score: %d - %d\n", loaded_game.score[0], loaded_game.score[1]);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Total moves: %d\n\n", loaded_game.moves_len);
+    safe_send(self->fd, header);
+
+    // Show initial board state
+    game_t initial_game;
+    game_init(&initial_game, loaded_game.player_name[0], loaded_game.player_name[1]);
+    initial_game.id = loaded_game.id;
+
+    char board[PROTO_MAX_LINE + 3];
+    game_to_string(&initial_game, board, sizeof(board));
+    char msg[PROTO_MAX_LINE + 100];
+    snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
+    safe_send(self->fd, msg);
+
+    safe_send(self->fd, "\nCommands: next | previous | exit\n");
+
+    return 0;
+}
+
+static int handle_replay_next(client_t *self)
+{
+    if (!self || !self->in_replay_mode)
+        return -1;
+
+    char replay_path[512];
+    snprintf(replay_path, sizeof(replay_path), "replays/g-%lu.rec", (unsigned long)self->replay_gid);
+
+    game_t loaded_game;
+    if (game_load_record(&loaded_game, replay_path) != 0)
+    {
+        safe_send(self->fd, "ERROR loading replay\n");
+        self->in_replay_mode = false;
+        return -1;
+    }
+
+    if (self->replay_current_move >= loaded_game.moves_len - 1) // check if we can advance
+    {
+        safe_send(self->fd, "Already at the last move\n");
+        return 0;
+    }
+
+    self->replay_current_move++;
+
+    game_t replay_game;
+    game_init(&replay_game, loaded_game.player_name[0], loaded_game.player_name[1]);
+    replay_game.id = loaded_game.id;
+
+    for (int i = 0; i <= self->replay_current_move; ++i)
+    {
+        game_make_move(&replay_game, loaded_game.moves[i].player, loaded_game.moves[i].pit_index);
+    }
+
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
+    char header[PROTO_MAX_LINE];
+    snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)self->replay_gid);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
+    safe_send(self->fd, header);
+
+    char board[PROTO_MAX_LINE];
+    game_to_string(&replay_game, board, sizeof(board));
+    char msg[PROTO_MAX_LINE + 100];
+    const char *player_name = loaded_game.moves[self->replay_current_move].player == PLAYER_A ? loaded_game.player_name[0] : loaded_game.player_name[1];
+    snprintf(msg, sizeof(msg), "Move %d/%d: %s played pit %d\n%s\n",
+             self->replay_current_move + 1, loaded_game.moves_len,
+             player_name, loaded_game.moves[self->replay_current_move].pit_index,
+             board);
+    safe_send(self->fd, msg);
+
+    safe_send(self->fd, "\nCommands: next | previous | exit\n> ");
+
+    return 0;
+}
+
+static int handle_replay_prev(client_t *self)
+{
+    if (!self || !self->in_replay_mode)
+        return -1;
+
+    char replay_path[512];
+    snprintf(replay_path, sizeof(replay_path), "replays/g-%lu.rec", (unsigned long)self->replay_gid);
+
+    game_t loaded_game;
+    if (game_load_record(&loaded_game, replay_path) != 0)
+    {
+        safe_send(self->fd, "ERROR loading replay\n");
+        self->in_replay_mode = false;
+        return -1;
+    }
+
+    if (self->replay_current_move < 0) // check if we can go back
+    {
+        safe_send(self->fd, "Already at the initial state\n");
+        return 0;
+    }
+
+    self->replay_current_move--;
+
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
+    char header[PROTO_MAX_LINE];
+    snprintf(header, sizeof(header), "=== REPLAY MODE: Game %lu ===\n", (unsigned long)self->replay_gid);
+    safe_send(self->fd, header);
+    snprintf(header, sizeof(header), "Players: %s vs %s\n", loaded_game.player_name[0], loaded_game.player_name[1]);
+    safe_send(self->fd, header);
+
+    game_t replay_game;
+    game_init(&replay_game, loaded_game.player_name[0], loaded_game.player_name[1]);
+    replay_game.id = loaded_game.id;
+
+    if (self->replay_current_move >= 0)
+    {
+        for (int i = 0; i <= self->replay_current_move; ++i)
+        {
+            game_make_move(&replay_game, loaded_game.moves[i].player, loaded_game.moves[i].pit_index);
+        }
+
+        char board[PROTO_MAX_LINE];
+        game_to_string(&replay_game, board, sizeof(board));
+        char msg[PROTO_MAX_LINE + 100];
+        const char *player_name = loaded_game.moves[self->replay_current_move].player == PLAYER_A ? loaded_game.player_name[0] : loaded_game.player_name[1];
+        snprintf(msg, sizeof(msg), "Move %d/%d: %s played pit %d\n%s\n",
+                 self->replay_current_move + 1, loaded_game.moves_len,
+                 player_name, loaded_game.moves[self->replay_current_move].pit_index,
+                 board);
+        safe_send(self->fd, msg);
+    }
+    else
+    {
+        // Show initial state
+        char board[PROTO_MAX_LINE];
+        game_to_string(&replay_game, board, sizeof(board));
+        char msg[PROTO_MAX_LINE + 100];
+        snprintf(msg, sizeof(msg), "Move 0/%d (Initial State):\n%s\n", loaded_game.moves_len, board);
+        safe_send(self->fd, msg);
+    }
+
+    safe_send(self->fd, "\nCommands: next | previous | exit\n");
+
+    return 0;
+}
+
+static int handle_replay_exit(client_t *self)
+{
+    if (!self || !self->in_replay_mode)
+        return -1;
+
+    self->in_replay_mode = false;
+    self->replay_gid = 0;
+    self->replay_current_move = -1;
+
+    safe_send(self->fd, "\033[2J\033[H"); // Clear screen and move cursor to top
+    safe_send(self->fd, "Exited replay mode\n");
+
+    return 0;
+}
+
+static int handle_show_games(server_state_t *state, client_t *self, char *args)
+{
     if (!args)
         return -1;
     char *from = strtok(args, " \n");
@@ -375,10 +564,8 @@ static int handle_show_games(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-static int handle_focus(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_focus(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
-    (void)state;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -416,9 +603,8 @@ static int handle_focus(server_state_t *state, client_t *self, client_t *clients
     return 0;
 }
 
-static int handle_show_board(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_show_board(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -438,40 +624,58 @@ static int handle_show_board(server_state_t *state, client_t *self, client_t *cl
     }
     char board[PROTO_MAX_LINE];
     game_to_string(g, board, sizeof(board));
-    char out[PROTO_MAX_LINE];
+    char out[PROTO_MAX_LINE + 3];
     snprintf(out, sizeof(out), "\n%s\n", board);
     safe_send(self->fd, out);
     return 0;
 }
 
-static int handle_observe(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_observe(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
-    if (!state || !args || !self) return -1;
+    if (!state || !args || !self)
+        return -1;
     char *from = strtok(args, " ");
     char *gid_s = strtok(NULL, " \n");
-    if (!from) return -1;
+    if (!from)
+        return -1;
     uint64_t gid = 0;
-    if (gid_s) gid = strtoull(gid_s, NULL, 10);
-    if (gid == 0) gid = self->focused_game_id;
-    if (gid == 0) { safe_send(self->fd, "ERROR no focused game\n"); return -1; }
+    if (gid_s)
+        gid = strtoull(gid_s, NULL, 10);
+    if (gid == 0)
+        gid = self->focused_game_id;
+    if (gid == 0)
+    {
+        safe_send(self->fd, "ERROR no focused game\n");
+        return -1;
+    }
     game_t *g = NULL;
-    if (server_get_game(state, gid, &g) != 0 || !g) { safe_send(self->fd, "ERROR game not found\n"); return -1; }
-    // privacy: allow if not private OR friend of either player
+    if (server_get_game(state, gid, &g) != 0 || !g)
+    {
+        safe_send(self->fd, "ERROR game not found\n");
+        return -1;
+    }
+    // allow if not private OR friend of either player
     int allowed = 0;
-    if (!g->private_mode) allowed = 1;
-    /* Do NOT allow a player to spectate their own game */
-    if (strcmp(g->player_name[0], from) == 0 || strcmp(g->player_name[1], from) == 0) {
+    if (!g->private_mode)
+        allowed = 1;
+    /* do NOT allow a player to spectate their own game */
+    if (strcmp(g->player_name[0], from) == 0 || strcmp(g->player_name[1], from) == 0)
+    {
         safe_send(self->fd, "ERROR cannot spectate your own game\n");
         return -1;
     }
-    if (is_friend_of(state, g->player_name[0], from) || is_friend_of(state, g->player_name[1], from)) allowed = 1;
-    if (!allowed) { safe_send(self->fd, "ERROR not allowed to spectate this private game\n"); return -1; }
+    if (is_friend_of(state, g->player_name[0], from) || is_friend_of(state, g->player_name[1], from))
+        allowed = 1;
+    if (!allowed)
+    {
+        safe_send(self->fd, "ERROR not allowed to spectate this private game\n");
+        return -1;
+    }
 
     // only one observed game at a time
     self->observed_game_id = gid;
 
-    // send initial board with spectating header
+    // send current board state
     char board[PROTO_MAX_LINE];
     game_to_string(g, board, sizeof(board));
     char msg[PROTO_MAX_LINE + 64];
@@ -480,11 +684,15 @@ static int handle_observe(server_state_t *state, client_t *self, client_t *clien
     return 0;
 }
 
-static int handle_stop_observe(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_stop_observe(client_t *self)
 {
-    (void)state; (void)clients; (void)args;
-    if (!self) return -1;
-    if (self->observed_game_id == 0) { safe_send(self->fd, "ERROR not currently spectating\n"); return -1; }
+    if (!self)
+        return -1;
+    if (self->observed_game_id == 0)
+    {
+        safe_send(self->fd, "ERROR not currently spectating\n");
+        return -1;
+    }
     char out[PROTO_MAX_LINE];
     snprintf(out, sizeof(out), "STOPPED_SPECTATING %lu\n", (unsigned long)self->observed_game_id);
     self->observed_game_id = 0;
@@ -494,7 +702,6 @@ static int handle_stop_observe(server_state_t *state, client_t *self, client_t *
 
 static int handle_refuse(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)self;
     if (!args)
         return -1;
     char *refuser = strtok(args, " ");
@@ -545,7 +752,6 @@ static int find_client_by_name(client_t *clients, const char *name)
 
 static int handle_chat(server_state_t *state, client_t *self, client_t *clients, char *args)
 {
-    (void)state;
     if (!args)
         return -1;
     char *from = strtok(args, " ");
@@ -600,9 +806,8 @@ static int handle_chat(server_state_t *state, client_t *self, client_t *clients,
     return 0;
 }
 
-static int handle_group_create(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_group_create(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -620,9 +825,8 @@ static int handle_group_create(server_state_t *state, client_t *self, client_t *
     return -1;
 }
 
-static int handle_group_invite(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_group_invite(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -641,9 +845,8 @@ static int handle_group_invite(server_state_t *state, client_t *self, client_t *
     return -1;
 }
 
-static int handle_group_quit(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_group_quit(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *gname = strtok(args, " ");
@@ -661,9 +864,8 @@ static int handle_group_quit(server_state_t *state, client_t *self, client_t *cl
     return -1;
 }
 
-static int handle_friend_add(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_friend_add(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -681,9 +883,8 @@ static int handle_friend_add(server_state_t *state, client_t *self, client_t *cl
     return -1;
 }
 
-static int handle_friend_remove(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_friend_remove(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " ");
@@ -701,9 +902,8 @@ static int handle_friend_remove(server_state_t *state, client_t *self, client_t 
     return -1;
 }
 
-static int handle_list_friends(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_list_friends(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
     if (!args)
         return -1;
     char *owner = strtok(args, " \n");
@@ -724,14 +924,15 @@ static int handle_list_friends(server_state_t *state, client_t *self, client_t *
     return 0;
 }
 
-static int handle_list_games(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_list_games(server_state_t *state, client_t *self)
 {
-    (void)clients;
-    if (!state || !self) return -1;
+    if (!state || !self)
+        return -1;
     char *requester = NULL;
     if (self->name[0] != '\0')
         requester = self->name;
-    if (!requester) return -1;
+    if (!requester)
+        return -1;
 
     char out[PROTO_MAX_LINE];
     out[0] = '\0';
@@ -762,17 +963,20 @@ static int handle_list_games(server_state_t *state, client_t *self, client_t *cl
     return 0;
 }
 
-static int handle_set_private(server_state_t *state, client_t *self, client_t *clients, char *args)
+static int handle_set_private(server_state_t *state, client_t *self, char *args)
 {
-    (void)clients;
-    if (!state || !args) return -1;
+    if (!state || !args)
+        return -1;
     char *from = strtok(args, " ");
     char *gid_s = strtok(NULL, " ");
     char *flag_s = strtok(NULL, " \n");
-    if (!from || !flag_s) return -1;
+    if (!from || !flag_s)
+        return -1;
+
+    // determine gid (specified or focused)
     uint64_t gid;
     if (gid_s)
-        gid  = strtoull(gid_s, NULL, 10);
+        gid = strtoull(gid_s, NULL, 10);
     if (gid == 0)
         gid = self->focused_game_id;
     if (gid == 0)
@@ -787,7 +991,7 @@ static int handle_set_private(server_state_t *state, client_t *self, client_t *c
         safe_send(self->fd, "ERROR game not found\n");
         return -1;
     }
-    // Only players in the game may toggle privacy
+    // only players in the game can toggle privacy
     if (strcmp(g->player_name[0], from) != 0 && strcmp(g->player_name[1], from) != 0)
     {
         safe_send(self->fd, "ERROR not a player in this game\n");
@@ -811,28 +1015,38 @@ int server_dispatch_command(server_state_t *state, client_t *self, client_t *cli
     char *args = NULL;
     const char *cmd = parse_cmd(line, &args);
 
-    if (strcmp(cmd, CMD_REGISTER) == 0) return handle_register(state, self, clients, args);
-    if (strcmp(cmd, CMD_BIO) == 0) return handle_bio(state, self, clients, args);
-    if (strcmp(cmd, CMD_BIO_SHOW) == 0) return handle_bio_show(state, self, clients, args);
-    if (strcmp(cmd, CMD_LIST_USERS) == 0) return handle_list_users(state, self, clients, args);
+    // If in replay mode, only allow replay commands
+    if (self->in_replay_mode) {
+        if (strcmp(cmd, CMD_REPLAY_NEXT) == 0) return handle_replay_next(self);
+        if (strcmp(cmd, CMD_REPLAY_PREV) == 0) return handle_replay_prev(self);
+        if (strcmp(cmd, CMD_REPLAY_EXIT) == 0) return handle_replay_exit(self);
+        safe_send(self->fd, "In replay mode. Use: next | previous | exit\n");
+        return 0;
+    }
+
+    if (strcmp(cmd, CMD_REGISTER) == 0) return handle_register(state, self, args);
+    if (strcmp(cmd, CMD_BIO) == 0) return handle_bio(state, self, args);
+    if (strcmp(cmd, CMD_BIO_SHOW) == 0) return handle_bio_show(state, self, args);
+    if (strcmp(cmd, CMD_LIST_USERS) == 0) return handle_list_users(state, self);
     if (strcmp(cmd, CMD_CHALLENGE) == 0) return handle_challenge(state, self, clients, args);
     if (strcmp(cmd, CMD_ACCEPT) == 0) return handle_accept(state, self, clients, args);
     if (strcmp(cmd, CMD_REFUSE) == 0) return handle_refuse(state, self, clients, args);
     if (strcmp(cmd, CMD_CHAT) == 0) return handle_chat(state, self, clients, args);
-    if (strcmp(cmd, CMD_GROUP_CREATE) == 0) return handle_group_create(state, self, clients, args);
-    if (strcmp(cmd, CMD_GROUP_INVITE) == 0) return handle_group_invite(state, self, clients, args);
-    if (strcmp(cmd, CMD_GROUP_QUIT) == 0) return handle_group_quit(state, self, clients, args);
-    if (strcmp(cmd, CMD_FRIEND_ADD) == 0) return handle_friend_add(state, self, clients, args);
-    if (strcmp(cmd, CMD_FRIEND_REMOVE) == 0) return handle_friend_remove(state, self, clients, args);
-    if (strcmp(cmd, CMD_LIST_FRIENDS) == 0) return handle_list_friends(state, self, clients, args);
+    if (strcmp(cmd, CMD_GROUP_CREATE) == 0) return handle_group_create(state, self, args);
+    if (strcmp(cmd, CMD_GROUP_INVITE) == 0) return handle_group_invite(state, self, args);
+    if (strcmp(cmd, CMD_GROUP_QUIT) == 0) return handle_group_quit(state, self, args);
+    if (strcmp(cmd, CMD_FRIEND_ADD) == 0) return handle_friend_add(state, self, args);
+    if (strcmp(cmd, CMD_FRIEND_REMOVE) == 0) return handle_friend_remove(state, self, args);
+    if (strcmp(cmd, CMD_LIST_FRIENDS) == 0) return handle_list_friends(state, self, args);
     if (strcmp(cmd, CMD_MOVE) == 0) return handle_move(state, self, clients, args);
-    if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, clients, args);
-    if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self, clients, args);
-    if (strcmp(cmd, CMD_OBSERVE) == 0) return handle_observe(state, self, clients, args);
-    if (strcmp(cmd, CMD_STOP_OBSERVE) == 0) return handle_stop_observe(state, self, clients, args);
-    if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, clients, args);
-    if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, clients, args);
-    if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, clients, args);
+    if (strcmp(cmd, CMD_SHOW_GAMES) == 0) return handle_show_games(state, self, args);
+    if (strcmp(cmd, CMD_LIST_GAMES) == 0) return handle_list_games(state, self);
+    if (strcmp(cmd, CMD_OBSERVE) == 0) return handle_observe(state, self, args);
+    if (strcmp(cmd, CMD_STOP_OBSERVE) == 0) return handle_stop_observe(self);
+    if (strcmp(cmd, CMD_SET_PRIVATE) == 0) return handle_set_private(state, self, args);
+    if (strcmp(cmd, CMD_FOCUS) == 0) return handle_focus(state, self, args);
+    if (strcmp(cmd, CMD_SHOW_BOARD) == 0) return handle_show_board(state, self, args);
+    if (strcmp(cmd, CMD_GET_REPLAY) == 0) return handle_get_replay(self, args);
 
     char resp[PROTO_MAX_LINE];
     snprintf(resp, sizeof(resp), "ECHO %s\n", line_in);
